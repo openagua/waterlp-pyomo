@@ -103,9 +103,6 @@ def _run_scenario(system=None, args=None, conn=None, supersubscenario=None, repo
     failed = False
 
     runs = range(system.nruns)
-    
-    if args.debug:
-        runs = runs[:5]
 
     #last_year = arrow.get(system.timesteps[0]).year
 

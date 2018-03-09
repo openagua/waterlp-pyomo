@@ -316,9 +316,9 @@ class WaterSystem(object):
                     else:
                         values = pd.read_json(value)
                         
-                        if dimension == 'Volumetric flow rate' and not is_function:
-                            for i, datetime in enumerate(self.dates_as_string[tsi:tsf]):
-                                values.iloc[i] *= self.tsdeltas[datetime].days * self.VOLUMETRIC_FLOW_RATE_CONST
+                        #if dimension == 'Volumetric flow rate' and not is_function:
+                            #for i, datetime in enumerate(self.dates_as_string[tsi:tsf]):
+                                #values.iloc[i] *= self.tsdeltas[datetime].days * self.VOLUMETRIC_FLOW_RATE_CONST
 
                         if has_blocks:
                             blocks = list(range(values.columns.size))
@@ -507,10 +507,10 @@ class WaterSystem(object):
 
                         val = df.loc[datetime, c]
                         
-                        if is_function:
-                            # TODO: use generic unit converter here (and move to evaluator)
-                            if dimension == 'Volumetric flow rate':
-                                val *= self.tsdeltas[datetime].days * self.VOLUMETRIC_FLOW_RATE_CONST                    
+                        #if is_function:
+                        # TODO: use generic unit converter here (and move to evaluator)
+                        if dimension == 'Volumetric flow rate':
+                            val *= self.tsdeltas[datetime].days * self.VOLUMETRIC_FLOW_RATE_CONST                    
                             
                         # create key
                         key = list(idx) + [i] if type(idx) == tuple else [idx,i]
@@ -739,7 +739,7 @@ class WaterSystem(object):
             msg = 'ERROR: Results could not be saved.'
             #self.logd.info(msg)
             if self.scenario.reporter:
-                self.scenario.reporter(action='error', message=msg)
+                self.scenario.reporter.report(action='error', message=msg)
             if self.session:
                 self.session.leave()
             sys.exit(0)

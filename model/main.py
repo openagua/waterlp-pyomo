@@ -99,16 +99,17 @@ def run_scenarios(args, log):
                             
             # organize the subscenarios
             flattened = product(option_subscenarios, scenario_subscenarios)
-            scnt = len(option_subscenarios) * len(scenario_subscenarios)
+            subscenario_count = len(option_subscenarios) * len(scenario_subscenarios)
             
             if args.debug:
-                tscnt = min(5, len(system.dates))
-                scnt = min(scnt, 3)
-                system.dates = system.dates[:tscnt]
-                system.dates_as_string = system.dates_as_string[:tscnt]
+                system.nruns = min(20, system.nruns)
+                system.dates = system.dates[:system.nruns]
+                system.dates_as_string = system.dates_as_string[:system.nruns]
                 
-            system.scenario.subscenario_count = scnt
-            system.scenario.total_steps = scnt * len(system.dates)
+                subscenario_count = min(subscenario_count, 5)
+                
+            system.scenario.subscenario_count = subscenario_count
+            system.scenario.total_steps = subscenario_count * len(system.dates)
         
             supersubscenarios = [{
                 'i': i+1,
@@ -116,7 +117,7 @@ def run_scenarios(args, log):
                 'variation_sets': variation_sets,
                 } for i, variation_sets in enumerate(flattened)]
             
-            all_supersubscenarios.extend(supersubscenarios)
+            all_supersubscenarios.extend(supersubscenarios[:subscenario_count])
             
         except Exception as err:
             err_class = err.__class__.__name__
@@ -132,15 +133,12 @@ def run_scenarios(args, log):
     # multiprocessing routine
     # =======================
     
-    if args.debug:
-        all_supersubscenarios = all_supersubscenarios[:3]
-    
     # create partial function
     p = partial(run_scenario, conn=conn, args=args)
     
     # set multiprocessing parameters
     poolsize = multiprocessing.cpu_count()
-    maxtasks = 1
+    maxtasks = None
     chunksize = 1
 
     pool = multiprocessing.Pool(processes=poolsize, maxtasksperchild=maxtasks)
@@ -149,7 +147,7 @@ def run_scenarios(args, log):
         .format(system.scenario.subscenario_count, poolsize, chunksize)
     print(msg)
     #log.info()
-    pools = pool.imap(p, all_supersubscenarios, chunksize=5)
+    pools = pool.imap(p, all_supersubscenarios, chunksize=chunksize)
 
     # stop the pool
     pool.close()
