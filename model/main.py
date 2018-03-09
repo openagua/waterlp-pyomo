@@ -1,5 +1,5 @@
 import argparse
-import multiprocessing
+import multiprocessing as mp
 import os
 import sys
 from datetime import datetime
@@ -71,7 +71,7 @@ def run_scenarios(args, log):
         post_reporter = PostReporter(args)
     else:
         post_reporter = None
-
+        
     for scenario_ids in args.scenario_ids:
         
         try:
@@ -102,7 +102,7 @@ def run_scenarios(args, log):
             subscenario_count = len(option_subscenarios) * len(scenario_subscenarios)
             
             if args.debug:
-                system.nruns = min(20, system.nruns)
+                system.nruns = min(5, system.nruns)
                 system.dates = system.dates[:system.nruns]
                 system.dates_as_string = system.dates_as_string[:system.nruns]
                 
@@ -133,15 +133,14 @@ def run_scenarios(args, log):
     # multiprocessing routine
     # =======================
     
-    # create partial function
     p = partial(run_scenario, conn=conn, args=args)
     
     # set multiprocessing parameters
-    poolsize = multiprocessing.cpu_count()
+    poolsize = mp.cpu_count()
     maxtasks = None
     chunksize = 1
 
-    pool = multiprocessing.Pool(processes=poolsize, maxtasksperchild=maxtasks)
+    pool = mp.Pool(processes=poolsize, maxtasksperchild=maxtasks)
 
     msg = 'Running {} subscenarios in multicore mode with {} workers, {} chunks each.' \
         .format(system.scenario.subscenario_count, poolsize, chunksize)
