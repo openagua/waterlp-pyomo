@@ -5,7 +5,7 @@
     "distutils": {
         "name": "scenario",
         "sources": [
-            "/home/david/WaterLP-MCMA/model/scenario.pyx"
+            "/home/david/waterlp-mcma/model/scenario.pyx"
         ]
     },
     "module_name": "scenario"

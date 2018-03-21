@@ -1,4 +1,4 @@
-from pyomo.environ import AbstractModel, Set, Objective, Var, Param, Constraint, Reals, NonNegativeReals, maximize, summation
+from pyomo.environ import AbstractModel, Set, Objective, Var, Param, Constraint, Reals, NonNegativeReals, minimize, maximize, summation
 
 #import wingdbstub
 
@@ -81,6 +81,8 @@ def create_model(name, template, nodes, links, types, ts_idx, params, blocks, de
     m.linkDelivery = Var(m.Links * m.TS, domain=NonNegativeReals) # not valued yet; here as a placeholder
     m.linkDeliveryDB = Var(m.LinkBlocks * m.TS, domain=NonNegativeReals)
     m.nodeStorage = Var(m.Storage * m.TS, domain=NonNegativeReals) # storage
+    
+    m.nodeDemandDeficit = Var(m.NodeBlocks * m.TS, domain=NonNegativeReals, initialize=0.0)
     
     #m.nodeStorageDB = Var(m.Storage)
     #m.nodeFulfillmentDB = Var(m.NodeBlocks * m.TS, domain=NonNegativeReals) # Percent of delivery fulfilled (i.e., 1 - % shortage)
@@ -204,6 +206,11 @@ def create_model(name, template, nodes, links, types, ts_idx, params, blocks, de
         return m.nodeDeliveryDB[j,b,t] <= m.nodeDemand[j,b,t]
     m.NodeBlock_constraint = Constraint(m.NodeBlocks, m.TS, rule=NodeBlock_rule)
 
+    def DemandDeficit_rule(m, j, b, t):
+        '''Demand deficit definition'''
+        return m.nodeDemandDeficit[j, b, t] == m.nodeDemand[j, b, t] - m.nodeDeliveryDB[j, b, t]
+    m.NodeDemandDeficit_constraint = Constraint(m.NodeBlocks, m.TS, rule=DemandDeficit_rule)
+
     #def LinkBlock_rule(m, i, j, b, t):
         #'''Link flow blocks cannot exceed their corresponding demand blocks.'''
         #return m.linkDeliveryDB[i,j,b,t] <= m.linkDemand[i,j,b,t]
@@ -277,11 +284,13 @@ def create_model(name, template, nodes, links, types, ts_idx, params, blocks, de
 
     def Objective_fn(m):
         # Link demand / value not yet implemented
-        if debug:
-            return summation(m.nodeValueDB, m.nodeDeliveryDB) - 1000 * summation(m.debugGain) - 1000 * summation(m.debugLoss)
-        else:
-            return summation(m.nodeValueDB, m.nodeDeliveryDB)
+        #if debug:cProfile
+            #return summation(m.nodeValueDB, m.nodeDeliveryDB) - 1000 * summation(m.debugGain) - 1000 * summation(m.debugLoss)
+        #else:
+        #return summation(m.nodeValueDB, m.nodeDeliveryDB)
+        return sum((m.nodeValueDB[j,b,t] * (m.nodeDemand[j,b,t] - m.nodeDeliveryDB[j,b,t])**2.0) for (j, b) in m.NodeBlocks for t in m.TS)
+        #return sum((m.nodeValueDB[j,b,t] * m.nodeDeliveryDB[j,b,t]) for (j, b) in m.NodeBlocks for t in m.TS)
 
-    m.Objective = Objective(rule=Objective_fn, sense=maximize)
+    m.Objective = Objective(rule=Objective_fn, sense=minimize)
 
     return m

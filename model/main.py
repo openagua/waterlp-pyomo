@@ -27,11 +27,11 @@ def run_scenarios(args, log):
     """
 
     #from scenario_debug import run_scenario
-    if args.debug:
-        from scenario_debug import run_scenario
-    else:
-        # NB: scenario is the Cythonized version of scenario_main
-        from scenario import run_scenario
+    #if args.debug:
+        #from scenario_debug import run_scenario
+    #else:
+        ## NB: scenario is the Cythonized version of scenario_main
+    from scenario import run_scenario
 
     args.starttime = datetime.now()
     
@@ -102,11 +102,11 @@ def run_scenarios(args, log):
             subscenario_count = len(option_subscenarios) * len(scenario_subscenarios)
             
             if args.debug:
-                system.nruns = min(5, system.nruns)
+                system.nruns = min(365, system.nruns)
                 system.dates = system.dates[:system.nruns]
                 system.dates_as_string = system.dates_as_string[:system.nruns]
                 
-                subscenario_count = min(subscenario_count, 5)
+                subscenario_count = min(subscenario_count, 1)
                 
             system.scenario.subscenario_count = subscenario_count
             system.scenario.total_steps = subscenario_count * len(system.dates)
