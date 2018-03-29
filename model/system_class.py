@@ -370,12 +370,30 @@ class WaterSystem(object):
                     'resource_type': resource_type.lower(),
                 }
                             
-    def setup_variations(self, variation_sets):
+    def setup_subscenario(self, supersubscenario):
         """
         Add variation to all resource attributes as needed.
         There are two variations: option variations and scenario variations.
         If there is any conflict, scenario variations will replace option variations.
         """
+        
+        variation_sets = supersubscenario.get('variation_sets')
+        
+        self.metadata = {'number': supersubscenario.get('i'), 'variation_sets': {}}
+        for i, variation_set in enumerate(variation_sets):
+            vs = []
+            for (resource_type, resource_id, attr_id), value in variation_set['variations'].items():
+                vs.append({
+                    'resource_type': resource_type,
+                    'resource_id': resource_id,
+                    'attr_id': attr_id,
+                    'variation': value
+                })
+            scenario_type = 'option' if i == 0 else 'scenario'
+            self.metadata['variation_sets'][scenario_type] = {
+                'parent_id': variation_set['parent_id'],
+                'variations': vs
+            }
                 
         for variation_set in variation_sets:
             for (resource_type, resource_id, attr_id), variation in variation_set['variations'].items():
@@ -628,7 +646,6 @@ class WaterSystem(object):
             self.save_results_to_source()
         elif self.args.destination == 'aws_s3':
             self.save_results_to_s3()
-        return
         
     def save_results_to_source(self):
 
@@ -740,26 +757,36 @@ class WaterSystem(object):
             #self.logd.info(msg)
             if self.scenario.reporter:
                 self.scenario.reporter.report(action='error', message=msg)
-            if self.session:
-                self.session.leave()
-            sys.exit(0)
+            raise
 
     
     def save_results_to_s3(self):
         
         import boto3
-        #s3 = boto3.client('s3', aws_access_key_id=args.AWS_ACCESS_KEY_ID, aws_secret_access_key=args.AWS_SECRET_ACCESS_KEY)
         s3 = boto3.client('s3')
-
-        result_scenario = self.scenarios.get(self.scenario.name)
+        
+        o, s = self.scenario.base_ids
+        base_path = 'results/P{project}/N{network}/{scenario}/{run}/V{subscenario:05}'.format(
+            project=self.network.project_id,
+            network=self.network.id,
+            run=self.args.start_time,
+            scenario='O{}-S{}'.format(o, s),
+            subscenario=self.metadata['number'])
 
         # save variable data to database
         res_scens = []
         res_names = {}
+    
         try:
+            
+            # write metadata
+            content = json.dumps(self.metadata, sort_keys=True, indent=4, separators=(',', ': ')).encode()
+            s3.put_object(Body=content, Bucket='openagua.org', Key=base_path + '/metadata.json')
+            
             count = 1
             pcount = 1
             nparams = len(self.results)
+            path = base_path + '/data/{parameter}.csv'
             for pname, param_values in self.results.items():
                 pcount += 1
                 if pname not in self.params:
@@ -794,18 +821,18 @@ class WaterSystem(object):
                     
                     has_blocks = ta.properties.get('has_blocks') \
                         or rt == 'node' and len(idx) == 2 \
-                        or rt=='link' and len(idx) == 3
+                        or rt == 'link' and len(idx) == 3
                     
                     if has_blocks:
                         block = 0 if len(idx)==n else idx[n]
-                        df = pd.DataFrame.from_dict({(res_name, block): values})
+                        df = pd.DataFrame.from_dict({(res_name, block): values}).groupby(axis=1, level=0).sum()
                     else:
                         df = pd.DataFrame.from_dict({res_name: values})
                     df_all = pd.concat([df_all, df], axis=1)
                
-                content = df_all.to_csv().encode()
-                path = 'results/P{}/N{}/{}/{}/{}.csv'.format(self.network.project_id, self.network.id, self.args.start_time, self.scenario.name, pname)
-                s3.put_object(Body=content, Bucket='openagua.org', Key=path)  
+                content = df_all.round(5).to_csv().encode()
+                
+                s3.put_object(Body=content, Bucket='openagua.org', Key=path.format(parameter=pname))
                 
                 if count % 10 == 0 or pcount==nparams:
                     if self.scenario.reporter:
@@ -817,7 +844,5 @@ class WaterSystem(object):
             #self.logd.info(msg)
             if self.scenario.reporter:
                 self.scenario.reporter.report(action='error', message=msg)
-            if self.session:
-                self.session.leave()
-            sys.exit(0)
+            raise
 

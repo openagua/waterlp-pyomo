@@ -735,7 +735,7 @@ static const char *__pyx_filename;
 
 
 static const char *__pyx_f[] = {
-  "model/scenario.pyx",
+  "scenario.pyx",
 };
 
 /*--- Type declarations ---*/

@@ -71,9 +71,8 @@ def _run_scenario(system=None, args=None, conn=None, supersubscenario=None, repo
     # intialize
     system.prepare_params()
     
-    # set up variations
-    variation_sets = supersubscenario.get('variation_sets')
-    system.setup_variations(variation_sets)
+    # set up subscenario
+    system.setup_subscenario(supersubscenario)
     
     # initialize boundary conditions
     system.update_boundary_conditions(0, system.foresight_periods, initialize=True)

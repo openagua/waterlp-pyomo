@@ -55,7 +55,7 @@ def make_levels(variation):
 def get_ref_key(resource):
     return 'x' in resource and 'node' or 'node_1_id' in resource and 'link' or 'nodes' in resource and 'network'    
     
-def create_subscenarios(network, template, scenario):
+def create_subscenarios(network, template, scenario, scenario_type):
     
     variations = scenario.layout.get('variations', [])
     
@@ -65,15 +65,16 @@ def create_subscenarios(network, template, scenario):
     concurrency = variations[0].get('concurrency') # this implies we can only have one scope per scenario
     
     if concurrency == 'independent':
-        return create_independent_subscenarios(network, template, scenario)
+        return create_independent_subscenarios(network, template, scenario, scenario_type)
     elif concurrency == 'crosswise':
-        return create_crosswise_subscenarios(network, template, scenario)
+        return create_crosswise_subscenarios(network, template, scenario, scenario_type)
     elif concurrency == 'concurrent':
-        return create_concurrent_subscenarios(network, template, scenario)
+        return create_concurrent_subscenarios(network, template, scenario, scenario_type)
     
-def create_independent_subscenarios(network, template, scenario):
+def create_independent_subscenarios(network, template, scenario, scenario_type):
     
     subscenarios = []
+    #path = '{ref_key}/{ref_id}/{attr_id}/{val:.3f}'
     
     for variation in scenario.layout.get('variations', []):
 
@@ -86,17 +87,19 @@ def create_independent_subscenarios(network, template, scenario):
             for value in values:
                 subscenarios.append({
                     'parent_id': scenario.id,
+                    'type': scenario_type,
                     'variations': {
                         (ref_key, resource.id, attr_id): {
                             'value': value,
                             'operator': variation.get('operator')
-                        }
+                        },
+                    #'path': path.format(ref_key=ref_key, ref_id=resource.id, attr_id=attr_id, val=value)
                     }
                 })
 
     return subscenarios
 
-def create_crosswise_subscenarios(network, template, scenario):
+def create_crosswise_subscenarios(network, template, scenario, scenario_type):
     subscenarios = []
 
     variations = scenario.layout.get('variations', [])
@@ -140,7 +143,7 @@ def create_crosswise_subscenarios(network, template, scenario):
             
     return subscenarios        
 
-def create_concurrent_subscenarios(network, scenario):
+def create_concurrent_subscenarios(network, template, scenario, scenario_type):
     return []
 
 def get_resources(network, template, scenario, variation):
@@ -150,7 +153,7 @@ def get_resources(network, template, scenario, variation):
     
     if resource_scope == 'resource':
         ref_key = variation.get('resource_type').lower() + 's'
-        return list(filter(lambda x: x.id == ref_id), network[ref_key])
+        return [resource for resource in network[ref_key] if resource.id == ref_id]
     
     elif resource_scope == 'type':
         # get the template type

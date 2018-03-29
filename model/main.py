@@ -1,7 +1,9 @@
 import argparse
+from ast import literal_eval
 import multiprocessing as mp
 import os
 import sys
+import uuid
 from datetime import datetime
 from functools import partial
 from os.path import join
@@ -27,13 +29,18 @@ def run_scenarios(args, log):
     """
 
     #from scenario_debug import run_scenario
-    #if args.debug:
-        #from scenario_debug import run_scenario
-    #else:
+    if args.debug:
+        from scenario_debug import run_scenario
+    else:
         ## NB: scenario is the Cythonized version of scenario_main
-    from scenario import run_scenario
+        from scenario import run_scenario
 
-    args.starttime = datetime.now()
+    args.starttime = datetime.now() # args.start_time is iso-formatted, but this is still probably redundant
+    
+    print("================================================")
+    print("STARTING RUN")
+    print("Start time: {}".format(args.starttime.isoformat()))
+    print("================================================")
     
     # ======================
     # connect to data server
@@ -87,8 +94,8 @@ def run_scenarios(args, log):
                         
         # create the system class
         # TODO: pass resources as dictionaries instead for quicker lookup
-        option_subscenarios = create_subscenarios(conn.network, conn.template, scenario.option)
-        scenario_subscenarios = create_subscenarios(conn.network, conn.template, scenario.scenario)
+        option_subscenarios = create_subscenarios(conn.network, conn.template, scenario.option, 'option')
+        scenario_subscenarios = create_subscenarios(conn.network, conn.template, scenario.scenario, 'scenario')
                     
         try:
             
@@ -110,7 +117,7 @@ def run_scenarios(args, log):
                 
             system.scenario.subscenario_count = subscenario_count
             system.scenario.total_steps = subscenario_count * len(system.dates)
-        
+
             supersubscenarios = [{
                 'i': i+1,
                 'system': copy(system), # this is intended to be a shallow copy
@@ -198,16 +205,15 @@ def commandline_parser():
     parser.add_argument('--mp', dest='message_protocol', default=None, help='''Message protocol to report progress back to client browser''')
     parser.add_argument('--wurl', dest='websocket_url',
                         help='''URL and port that is listening for activity.''')
-    parser.add_argument('--guid', dest='unique_id',
+    parser.add_argument('--guid', default=uuid.uuid4().hex, dest='unique_id',
                         help='''Unique identifier for this run.''')
-    parser.add_argument('--d', dest='debug', default='False',
-                        help='''Debug flag.''')
+    parser.add_argument('--d', dest='debug', action='store_true', help='''Debug flag.''')
     parser.add_argument('--c', dest='custom', type=dict, default={},
                         help='''Custom arguments passed as stringified JSON.''')
     parser.add_argument('--dest', dest='destination', default='source', help='''Destination of results. Options for now include "source" or "aws_s3"''')
-    parser.add_argument('--wi', dest='write_input', default='True',
+    parser.add_argument('--wi', dest='write_input', action='store_true',
                         help='''Write input data to results.''')
-    parser.add_argument('--st', dest='start_time', default='', help='''Run start time.''')
+    parser.add_argument('--st', dest='start_time', default=datetime.now().isoformat(), help='''Run start time.''')
     parser.add_argument('--rkey', dest='report_api_key', default='', help='''Generic option for passing an API key for reporting to client.''')
 
     return parser
@@ -220,9 +226,6 @@ def main():
     parser = commandline_parser()
     args, unknown = parser.parse_known_args(sys.argv[1:])
     here = os.path.abspath(os.path.dirname(__file__))
-    
-    args.write_input = eval(args.write_input)
-    args.debug = eval(args.debug)
 
     # log file location - based on user
 
@@ -241,9 +244,8 @@ def main():
     log = create_logger(args.app_name, logfile, '%(asctime)s - %(message)s')
 
     # pre-processing
-    for arg in ['scenario_ids']:
-        if eval('args.%s' % arg) is not None:
-            exec('args.%s = eval(args.%s)' % (arg, arg))
+    if args.scenario_ids:
+        args.scenario_ids = literal_eval(args.scenario_ids)
 
     argdict = args.__dict__.copy()
     argtuples = sorted(argdict.items())
