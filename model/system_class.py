@@ -765,7 +765,10 @@ class WaterSystem(object):
         import boto3
         s3 = boto3.client('s3')
         
-        o, s = self.scenario.base_ids
+        if len(self.scenario.base_ids) == 1:
+            o = s = self.scenario.base_ids[0]
+        else:
+            o, s = self.scenario.base_ids            
         base_path = 'results/P{project}/N{network}/{scenario}/{run}/V{subscenario:05}'.format(
             project=self.network.project_id,
             network=self.network.id,

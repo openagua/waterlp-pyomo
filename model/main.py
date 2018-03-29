@@ -207,7 +207,7 @@ def commandline_parser():
                         help='''URL and port that is listening for activity.''')
     parser.add_argument('--guid', default=uuid.uuid4().hex, dest='unique_id',
                         help='''Unique identifier for this run.''')
-    parser.add_argument('--d', dest='debug', action='store_true', help='''Debug flag.''')
+    parser.add_argument('--debug', dest='debug', action='store_true', help='''Debug flag.''')
     parser.add_argument('--c', dest='custom', type=dict, default={},
                         help='''Custom arguments passed as stringified JSON.''')
     parser.add_argument('--dest', dest='destination', default='source', help='''Destination of results. Options for now include "source" or "aws_s3"''')
