@@ -29,10 +29,13 @@ def run_scenarios(args, log):
     """
 
     #from scenario_debug import run_scenario
+    print('')
     if args.debug:
         from scenario_debug import run_scenario
+        print("DEBUG ON")
     else:
         ## NB: scenario is the Cythonized version of scenario_main
+        print("DEBUG OFF")
         from scenario import run_scenario
 
     args.starttime = datetime.now() # args.start_time is iso-formatted, but this is still probably redundant
@@ -113,7 +116,7 @@ def run_scenarios(args, log):
                 system.dates = system.dates[:system.nruns]
                 system.dates_as_string = system.dates_as_string[:system.nruns]
                 
-                subscenario_count = min(subscenario_count, 1)
+                subscenario_count = min(subscenario_count, 10)
                 
             system.scenario.subscenario_count = subscenario_count
             system.scenario.total_steps = subscenario_count * len(system.dates)
