@@ -287,10 +287,11 @@ def create_model(name, template, nodes, links, types, ts_idx, params, blocks, de
         #if debug:cProfile
             #return summation(m.nodeValueDB, m.nodeDeliveryDB) - 1000 * summation(m.debugGain) - 1000 * summation(m.debugLoss)
         #else:
-        #return summation(m.nodeValueDB, m.nodeDeliveryDB)
-        return sum((m.nodeValueDB[j,b,t] * (m.nodeDemand[j,b,t] - m.nodeDeliveryDB[j,b,t])**2.0) for (j, b) in m.NodeBlocks for t in m.TS)
+        return summation(m.nodeValueDB, m.nodeDeliveryDB)
+        #return sum((m.nodeValueDB[j,b,t] * (m.nodeDemand[j,b,t] - m.nodeDeliveryDB[j,b,t])**2.0) for (j, b) in m.NodeBlocks for t in m.TS)
+
         #return sum((m.nodeValueDB[j,b,t] * m.nodeDeliveryDB[j,b,t]) for (j, b) in m.NodeBlocks for t in m.TS)
 
-    m.Objective = Objective(rule=Objective_fn, sense=minimize)
+    m.Objective = Objective(rule=Objective_fn, sense=maximize)
 
     return m

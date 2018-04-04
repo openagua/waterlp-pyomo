@@ -1,3 +1,4 @@
+from math import sqrt
 import json
 import sys
 from collections import OrderedDict
@@ -222,6 +223,9 @@ class WaterSystem(object):
         self.evaluator.tsi = tsi
         self.evaluator.tsf = tsf
         
+        nblocks = 10
+        self.default_blocks = list(range(nblocks))
+        
         # collect source data
         for source_id in self.scenario.source_ids:
 
@@ -322,6 +326,20 @@ class WaterSystem(object):
 
                         if has_blocks:
                             blocks = list(range(values.columns.size))
+                            
+                    # routine to add blocks using quadratic values - this needs to be paired with a similar routine when updating boundary conditions
+                    if has_blocks and len(blocks) == 1:
+                        blocks = self.default_blocks
+                        nblocks = len(blocks)
+                        if param_name == 'nodeDemand':
+                            values[0] /= nblocks
+                            for block in blocks:
+                                values[block] = values[0]
+                        elif param_name == 'nodePriority':
+                            values = values.reindex(columns=self.default_blocks)
+                            values[nblocks-1] = values[0]
+                            for i, block in enumerate(blocks[-1::-1]):
+                                values[block] = values[nblocks-1] - sqrt(i/nblocks)
 
                     if param_name not in self.timeseries:
                         self.timeseries[param_name] = {}
@@ -426,18 +444,18 @@ class WaterSystem(object):
 
                         default_timeseries = pd.read_json(self.evaluator.default_timeseries).fillna(0)
                         # TODO: get default from attr
-                        
+
                         if param_name not in self.variables:
                             self.variables[param_name] = {}
                         self.timeseries[param_name][idx] = {
                             'values': perturb(default_timeseries, variation),
                             'dimension': attr['dim']
                         }
-                        
-                    
+
+
     def init_pyomo_params(self):
         """Initialize Pyomo parameters with definitions."""
-        
+
         for param_name, param in self.params.items():
 
             type_attr = param['type_attr']
@@ -485,9 +503,7 @@ class WaterSystem(object):
                 'initial_values': initial_values,
                 'expression': expression
             })
-                
-            
-                
+
     def update_initial_conditions(self):
         """Update initial conditions, such as reservoir and groundwater storage."""
 
@@ -513,6 +529,24 @@ class WaterSystem(object):
                         returncode, errormsg, df = self.evaluator.eval_function(p['function'], flavor='pandas', counter=0)
                     except:
                         raise
+                    
+                    # update missing blocks, if any
+                    # routine to add blocks using quadratic values - this needs to be paired with a similar routine when updating boundary conditions
+                    if p['has_blocks']:
+                        if len(df.columns) == 1:
+                            values = df
+                            nblocks = len(self.default_blocks)
+                            if param_name == 'nodeDemand':
+                                values[0] /= nblocks
+                                for block in self.default_blocks:
+                                    values[block] = values[0]
+                            elif param_name == 'nodePriority':
+                                values = values.reindex(columns=self.default_blocks)
+                                values[nblocks-1] = values[0]
+                                for i, block in enumerate(self.default_blocks[-1::-1]):
+                                    values[block] = values[nblocks-1] - sqrt(i/nblocks)                                   
+                            df = values
+                    
                                         
                 else:
                     df = p['values']
@@ -650,16 +684,20 @@ class WaterSystem(object):
     def save_results_to_source(self):
 
         result_scenario = self.scenarios.get(self.scenario.name)
-        if result_scenario and result_scenario.id not in self.scenario.source_ids:
-            self.conn.call('purge_scenario', {'scenario_id': result_scenario.id})
-        result_scenario = self.conn.call('add_scenario',
-                       {'network_id': self.network.id, 'scen': {
-                           'id': None,
-                           'name': self.scenario.name,
-                           'description': '',
-                           'network_id': self.network.id,
-                           'layout': {'class': 'results', 'sources': self.scenario.base_ids, 'tags': self.scenario.tags}
-                       }})
+        #if result_scenario and result_scenario.id not in self.scenario.source_ids:
+            
+            #self.conn.call('purge_scenario', {'scenario_id': result_scenario.id})
+            # TODO: double check this routine. The result scenario should be re-used, so that any favorite can refer to the same scenario ID
+        if not result_scenario or result_scenario.id in self.scenario.source_ids:
+            result_scenario = self.conn.call('add_scenario',
+                           {'network_id': self.network.id, 'scen': {
+                               'id': None,
+                               'name': self.scenario.name,
+                               'description': '',
+                               'network_id': self.network.id,
+                               'layout': {'class': 'results', 'sources': self.scenario.base_ids, 'tags': self.scenario.tags}
+                           }})
+
 
 
         # save variable data to database
