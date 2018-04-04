@@ -4,8 +4,7 @@ from io import StringIO
 from os.path import join
 import json
 
-#from model import create_model
-from model_quadratic import create_model
+from model import create_model
 from pyomo.opt import SolverFactory, SolverStatus, TerminationCondition
 from logger import create_logger
 
@@ -87,15 +86,14 @@ def _run_scenario(system=None, args=None, conn=None, supersubscenario=None, repo
         ts_idx=system.ts_idx,
         params=system.params,
         blocks=system.blocks,
-        debug=debug
+        debug=args.debug_lp
     )
     
     system.instance = system.model.create_instance()
 
     system.update_internal_params()
 
-    #optimizer = SolverFactory(args.solver)
-    optimizer = SolverFactory('gurobi')
+    optimizer = SolverFactory(args.solver)
     #logd.info('Model created.')
     #logd.info('Starting model run.')
 

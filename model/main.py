@@ -70,7 +70,7 @@ def run_scenarios(args, log):
         attrs=attrs,
         settings=conn.network.layout.get('settings'),
         args=args,
-    )    
+    )
     
     scenario_lookup = {}
     
@@ -112,7 +112,7 @@ def run_scenarios(args, log):
             subscenario_count = len(option_subscenarios) * len(scenario_subscenarios)
             
             if args.debug:
-                system.nruns = min(5, system.nruns)
+                system.nruns = min(365, system.nruns)
                 system.dates = system.dates[:system.nruns]
                 system.dates_as_string = system.dates_as_string[:system.nruns]
                 
@@ -210,6 +210,7 @@ def commandline_parser():
                         help='''URL and port that is listening for activity.''')
     parser.add_argument('--guid', default=uuid.uuid4().hex, dest='unique_id',
                         help='''Unique identifier for this run.''')
+    parser.add_argument('--debug_lp', dest='debug_lp', action='store_true', help='''Debug flag for the Pyomo model.''')        
     parser.add_argument('--debug', dest='debug', action='store_true', help='''Debug flag.''')
     parser.add_argument('--c', dest='custom', type=dict, default={},
                         help='''Custom arguments passed as stringified JSON.''')

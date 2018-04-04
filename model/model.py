@@ -1,6 +1,4 @@
-from pyomo.environ import AbstractModel, Set, Objective, Var, Param, Constraint, Reals, NonNegativeReals, maximize, summation
-
-#import wingdbstub
+from pyomo.environ import AbstractModel, Set, Objective, Var, Param, Constraint, Reals, NonNegativeReals, minimize, maximize, summation
 
 # create the model
 def create_model(name, template, nodes, links, types, ts_idx, params, blocks, debug=False):
@@ -82,13 +80,15 @@ def create_model(name, template, nodes, links, types, ts_idx, params, blocks, de
     m.linkDeliveryDB = Var(m.LinkBlocks * m.TS, domain=NonNegativeReals)
     m.nodeStorage = Var(m.Storage * m.TS, domain=NonNegativeReals) # storage
     
+    m.nodeDemandDeficit = Var(m.NodeBlocks * m.TS, domain=NonNegativeReals, initialize=0.0)
+    
     #m.nodeStorageDB = Var(m.Storage)
     #m.nodeFulfillmentDB = Var(m.NodeBlocks * m.TS, domain=NonNegativeReals) # Percent of delivery fulfilled (i.e., 1 - % shortage)
 
     m.nodeGain = Var(m.Nodes * m.TS, domain=Reals) # gain (local inflows; can be net positive or negative)
-    #if debug:
-    m.debugGain = Var(m.Nodes * m.TS, domain=NonNegativeReals)
-    m.debugLoss = Var(m.Nodes * m.TS, domain=NonNegativeReals)
+    if debug:
+        m.debugGain = Var(m.Nodes * m.TS, domain=NonNegativeReals)
+        m.debugLoss = Var(m.Nodes * m.TS, domain=NonNegativeReals)
     m.nodeLoss = Var(m.Nodes * m.TS, domain=Reals) # loss (local outflow; can be net positive or negative)
     m.nodeInflow = Var(m.Nodes * m.TS, domain=NonNegativeReals) # total inflow to a node
     m.nodeOutflow = Var(m.Nodes * m.TS, domain=NonNegativeReals) # total outflow from a node
@@ -136,10 +136,10 @@ def create_model(name, template, nodes, links, types, ts_idx, params, blocks, de
         else:
             '''Other nodes can gain water from local gains'''
             gain = m.nodeLocalGain[j,t]
-        #if debug:
-            #return m.nodeGain[j,t] == gain + m.debugGain[j,t]
-        #else:
-        return m.nodeGain[j,t] == gain
+        if debug:
+            return m.nodeGain[j,t] == gain + m.debugGain[j,t]
+        else:
+            return m.nodeGain[j,t] == gain
     m.LocalGain_constraint = Constraint(m.Nodes, m.TS, rule=LocalGain_rule)
 
     def LocalLoss_rule(m, j, t):
@@ -148,13 +148,13 @@ def create_model(name, template, nodes, links, types, ts_idx, params, blocks, de
         elif j in m.DemandNodes:
             loss = m.nodeLocalLoss[j,t] + m.nodeDelivery[j,t] * m.nodeConsumptiveLoss[j,t] / 100
         elif j in m.Groundwater:
-            loss = m.nodeLocalLoss[j,t] + m.debugLoss[j,t]
+            loss = m.nodeLocalLoss[j,t]
         else:
             loss = m.nodeLocalLoss[j,t]
-        #if debug:
-            #return m.nodeLoss[j,t] == loss + m.debugLoss[j,t]
-        #else:
-        return m.nodeLoss[j,t] == loss
+        if debug:
+            return m.nodeLoss[j,t] == loss + m.debugLoss[j,t]
+        else:
+            return m.nodeLoss[j,t] == loss
     m.LocalLoss_constraint = Constraint(m.Nodes, m.TS, rule=LocalLoss_rule)
 
     def NodeInflow_definition(m, j, t):
@@ -203,6 +203,11 @@ def create_model(name, template, nodes, links, types, ts_idx, params, blocks, de
         '''
         return m.nodeDeliveryDB[j,b,t] <= m.nodeDemand[j,b,t]
     m.NodeBlock_constraint = Constraint(m.NodeBlocks, m.TS, rule=NodeBlock_rule)
+
+    def DemandDeficit_rule(m, j, b, t):
+        '''Demand deficit definition'''
+        return m.nodeDemandDeficit[j, b, t] == m.nodeDemand[j, b, t] - m.nodeDeliveryDB[j, b, t]
+    m.NodeDemandDeficit_constraint = Constraint(m.NodeBlocks, m.TS, rule=DemandDeficit_rule)
 
     #def LinkBlock_rule(m, i, j, b, t):
         #'''Link flow blocks cannot exceed their corresponding demand blocks.'''
@@ -281,6 +286,9 @@ def create_model(name, template, nodes, links, types, ts_idx, params, blocks, de
             return summation(m.nodeValueDB, m.nodeDeliveryDB) - 1000 * summation(m.debugGain) - 1000 * summation(m.debugLoss)
         else:
             return summation(m.nodeValueDB, m.nodeDeliveryDB)
+        #return sum((m.nodeValueDB[j,b,t] * (m.nodeDemand[j,b,t] - m.nodeDeliveryDB[j,b,t])**2.0) for (j, b) in m.NodeBlocks for t in m.TS)
+
+        #return sum((m.nodeValueDB[j,b,t] * m.nodeDeliveryDB[j,b,t]) for (j, b) in m.NodeBlocks for t in m.TS)
 
     m.Objective = Objective(rule=Objective_fn, sense=maximize)
 

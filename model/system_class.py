@@ -750,7 +750,11 @@ class WaterSystem(object):
                 for pid, dataset_value in dataset_values.items():
     
                     # define the dataset value
-                    value = json.dumps(OrderedDict(sorted(dataset_value.items())))
+                    # first, aggregate blocks
+                    df = pd.DataFrame(data=dataset_value).sum(axis=1)
+                    value = json.dumps({'0': df.to_dict()})
+                    
+                    #value = json.dumps(OrderedDict(sorted(dataset_value.items())))
     
                     # create the resource scenario (dataset attached to a specific resource attribute)
                     rs = {
@@ -866,12 +870,13 @@ class WaterSystem(object):
                     
                     if has_blocks:
                         block = 0 if len(idx)==n else idx[n]
-                        df = pd.DataFrame.from_dict({(res_name, block): values}).groupby(axis=1, level=0).sum()
+                        df = pd.DataFrame.from_dict({(res_name, block): values})
                     else:
                         df = pd.DataFrame.from_dict({res_name: values})
                     df_all = pd.concat([df_all, df], axis=1)
                
-                content = df_all.round(5).to_csv().encode()
+                summed = df_all.groupby(axis=1, level=0).sum()
+                content = summed.round(5).to_csv().encode()
                 
                 s3.put_object(Body=content, Bucket='openagua.org', Key=path.format(parameter=pname))
                 

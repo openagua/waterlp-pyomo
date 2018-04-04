@@ -284,7 +284,7 @@ def create_model(name, template, nodes, links, types, ts_idx, params, blocks, de
 
     def Objective_fn(m):
         # Link demand / value not yet implemented
-        #if debug:cProfile
+        #if debug:
             #return summation(m.nodeValueDB, m.nodeDeliveryDB) - 1000 * summation(m.debugGain) - 1000 * summation(m.debugLoss)
         #else:
         return summation(m.nodeValueDB, m.nodeDeliveryDB)
