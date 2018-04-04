@@ -19,7 +19,7 @@ from utils import create_subscenarios
 
 from copy import copy
 
-import wingdbstub
+#import wingdbstub
 
 def run_scenarios(args, log):
     """
