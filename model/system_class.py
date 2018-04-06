@@ -640,7 +640,7 @@ class WaterSystem(object):
                 #val = v.value if v.value is None else float(v.value)
                     
                 self.results[param.name][res_idx][timestamp] = p.value
-        
+
     def save_results(self):
         
         if self.scenario.reporter:
