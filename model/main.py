@@ -19,7 +19,7 @@ from utils import create_subscenarios
 
 from copy import copy
 
-#import wingdbstub
+import wingdbstub
 
 def run_scenarios(args, log):
     """
@@ -112,9 +112,8 @@ def run_scenarios(args, log):
             flattened = product(option_subscenarios, scenario_subscenarios)
             subscenario_count = len(option_subscenarios) * len(scenario_subscenarios)
             
-            system.nruns = min(730, system.nruns)
             if args.debug:
-                system.nruns = min(730, system.nruns)
+                system.nruns = min(10, system.nruns)
                 system.dates = system.dates[:system.nruns]
                 system.dates_as_string = system.dates_as_string[:system.nruns]
                 

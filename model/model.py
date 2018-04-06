@@ -146,7 +146,8 @@ def create_model(name, template, nodes, links, types, ts_idx, params, blocks, de
         if j in m.Reservoir:
             loss = m.nodeNetEvaporation[j,t]
         elif j in m.DemandNodes:
-            loss = m.nodeLocalLoss[j,t] + m.nodeDelivery[j,t] * m.nodeConsumptiveLoss[j,t] / 100
+            #loss = m.nodeLocalLoss[j,t] + m.nodeDelivery[j,t] * m.nodeConsumptiveLoss[j,t] / 100
+            loss = m.nodeLocalLoss[j,t] + m.nodeDelivery[j,t] # new concept is that delivery = lost
         elif j in m.Groundwater:
             loss = m.nodeLocalLoss[j,t]
         else:
@@ -190,7 +191,8 @@ def create_model(name, template, nodes, links, types, ts_idx, params, blocks, de
             # deliveries to demand nodes (urban, ag, general) must equal actual inflows
             # note the use of local gains & losses: local sources such as precipitation can be included in deliveries
             # TODO: make this more sophisticated to account for more specific gains and losses (basically, everything except consumptive losses; this might be left to the user to add precip, etc. as part of a local gain function)
-            return m.nodeDelivery[j,t] == m.nodeInflow[j,t] + m.nodeLocalGain[j,t] - m.nodeLocalLoss[j,t]
+            #return m.nodeDelivery[j,t] == m.nodeInflow[j,t] + m.nodeLocalGain[j,t] - m.nodeLocalLoss[j,t]
+            return m.nodeDelivery[j,t] == m.nodeInflow[j,t] - m.nodeOutflow[j,t] + m.nodeLocalGain[j,t] - m.nodeLocalLoss[j,t] # assumption is that demand is accounted for as a loss
         else:
             # delivery cannot exceed sum of inflows
             # TODO: update this to also include local gains and losses (at, for example, flow requirement nodes)
