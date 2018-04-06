@@ -94,7 +94,7 @@ def addblocks(values, param_name, blocks):
 
 class WaterSystem(object):
 
-    def __init__(self, conn, name, network, all_scenarios, template, attrs, settings, args, timestep_format=None, session=None, reporter=None, scenario=None):
+    def __init__(self, conn, name, network, all_scenarios, template, attrs, settings, args, date_format=None, session=None, reporter=None, scenario=None):
         
         self.VOLUMETRIC_FLOW_RATE_CONST = 0.0864  # 60*60*24/1e6
         
@@ -109,7 +109,7 @@ class WaterSystem(object):
 
         self.scenarios = {s.name: s for s in all_scenarios.scenarios}
 
-        self.evaluator = Evaluator(self.conn, settings=settings)
+        self.evaluator = Evaluator(self.conn, settings=settings, date_format=date_format)
         self.dates = self.evaluator.dates
         self.dates_as_string = self.evaluator.dates_as_string
                         
@@ -117,9 +117,9 @@ class WaterSystem(object):
         self.tsdeltas = {}
     
         # user the dates in evaluator because we've already incurred the expense of parsing the date.
-        self.tsdeltas = dict((ts.to_datetime_string(), self.evaluator.dates[i + 1] - ts) for i, ts in
+        self.tsdeltas = dict((self.dates_as_string[i], self.evaluator.dates[i + 1] - ts) for i, ts in
                                  enumerate(self.evaluator.dates[:-1]))
-        self.tsdeltas[self.evaluator.dates[-1].to_datetime_string()] = self.tsdeltas[self.evaluator.dates[-2].to_datetime_string()]  # TODO: fix this
+        self.tsdeltas[self.evaluator.dates_as_string[-1]] = self.tsdeltas[self.evaluator.dates_as_string[-2]]  # TODO: fix this
 
 
         # prepare data - we could move some of this to elsewhere
@@ -345,7 +345,8 @@ class WaterSystem(object):
                                 
                         # routine to add blocks using quadratic values - this needs to be paired with a similar routine when updating boundary conditions
                         if has_blocks and len(blocks) == 1:
-                            values = addblocks(values, param_name, self.default_blocks)
+                            blocks = self.default_blocks
+                            values = addblocks(values, param_name, blocks)
     
                         if param_name not in self.timeseries:
                             self.timeseries[param_name] = {}
@@ -451,13 +452,10 @@ class WaterSystem(object):
                         self.variables[param_name][idx] = perturb(0, variation, data_type)
                     elif data_type == 'timeseries':
 
-                        default_timeseries = json.loads(self.evaluator.default_timeseries)
-                        # TODO: get default from attr
-
                         if param_name not in self.variables:
                             self.variables[param_name] = {}
                         self.timeseries[param_name][idx] = {
-                            'values': perturb(default_timeseries, variation),
+                            'values': perturb(self.evaluator.default_timeseries.copy(), variation),
                             'dimension': attr['dim']
                         }
 

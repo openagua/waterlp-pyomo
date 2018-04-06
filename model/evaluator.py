@@ -63,9 +63,15 @@ def get_scenario_data(evaluator, **kwargs):
     return scenario_data
 
 
-def empty_data_timeseries(dates):
+def empty_data_timeseries(dates, date_format='iso', flavor='json'):
     values = [None] * len(dates)
-    timeseries = pd.DataFrame({'0': values}, index=dates).to_json(date_format='iso')
+    if flavor == 'json':
+        if date_format == 'iso':
+            timeseries = pd.DataFrame({'0': values}, index=dates).to_json(date_format='iso')
+        elif date_format == 'original':
+            timeseries = pd.DataFrame({'0': values}, index=dates, parse_dates=False)
+    elif flavor == 'dict':
+        timeseries = pd.DataFrame({0: values}, index=dates).to_dict()
     return timeseries
 
 
@@ -97,19 +103,27 @@ def eval_descriptor(s):
     return returncode, errormsg, result
 
 
-def eval_timeseries(timeseries, dates, fill_value=None, method=None, flavor=None):
-    values = json.loads(timeseries)
-    if not values:
-        result = {0: {date: None for date in dates}}
+def eval_timeseries(timeseries, dates, date_format, fill_value=None, method=None, flavor=None):
+    df = pd.read_json(timeseries)
+    if df.empty:
+        df = pd.DataFrame(index=dates, columns=['0'])
     else:
-        result = {}
-        for c, vals in values.items():
-            col = int(c)
-            result[col] = {}
-            for d, val in vals.items():
-                result[col][pendulum.parse(d).to_datetime_string()] = fill_value if val is None else val
-                
-    return result
+        #df = df.reindex(pd.DatetimeIndex(dates))
+        if fill_value is not None:
+            df.fillna(value=fill_value, inplace=True)
+        elif method:
+            df.fillna(method=method)
+
+    if flavor is None or flavor == 'json':
+        result = df.to_json(date_format=date_format)
+    elif flavor == 'dict':
+        df.index = df.index.strftime(date_format)
+        result = df.to_dict()
+
+    returncode = 0
+    errormsg = 'No errors!'
+
+    return returncode, errormsg, result
 
 
 def eval_array(array):
@@ -145,7 +159,7 @@ def parse_function(s, name, modules=()):
     return func
 
 
-def make_dates(settings, date_format=True):
+def make_dates(settings, date_format=None):
 
     # TODO: Make this more advanced - this should be pulled out into a different library available to all
     timestep = settings.get('timestep')
@@ -165,14 +179,17 @@ def make_dates(settings, date_format=True):
             d3 = dt.last_of('month')
             dates.extend([d1, d2, d3])
     
-    dates_as_string = [date.to_datetime_string() for date in dates]
+    if date_format is None:
+        dates_as_string = [date.to_datetime_string() for date in dates]
+    else:
+        dates_as_string = [date.strftime(date_format) for date in dates]
 
     return dates_as_string, dates
 
 
-def make_default_value(data_type, dates=None):
+def make_default_value(data_type, dates=None, flavor='json', date_format='iso'):
     if data_type == 'timeseries':
-        default_eval_value = empty_data_timeseries(dates)
+        default_eval_value = empty_data_timeseries(dates, flavor=flavor, date_format=date_format)
     elif data_type == 'array':
         default_eval_value = '[[],[]]'
     else:
@@ -195,11 +212,12 @@ class InnerSyntaxError(SyntaxError):
 class Evaluator:
     def __init__(self, conn=None, scenario_id=None, settings=None, date_format=None, data_type=None):
         self.conn = conn
-        self.dates_as_string, self.dates = make_dates(settings)
+        self.date_format = date_format
+        self.dates_as_string, self.dates = make_dates(settings, date_format=date_format)
         #self.current_dates = None
         self.scenario_id = scenario_id
         self.data_type = data_type
-        self.default_timeseries = make_default_value('timeseries', self.dates_as_string)
+        self.default_timeseries = make_default_value('timeseries', self.dates_as_string, flavor='dict', date_format='original')
         self.default_array = make_default_value('array')
 
         self.calculators = {}
@@ -239,7 +257,8 @@ class Evaluator:
             returncode, errormsg, result = eval_scalar(value.value)
 
         elif data_type == 'timeseries':
-            result = eval_timeseries(value.value, self.dates_as_string, fill_value=fill_value, flavor=flavor)
+
+            returncode, errormsg, result = eval_timeseries(value.value, self.dates_as_string, self.date_format, fill_value=fill_value, flavor=flavor)
 
         elif data_type == 'array':
             returncode, errormsg, result = eval_array(value.value)
