@@ -97,23 +97,19 @@ def eval_descriptor(s):
     return returncode, errormsg, result
 
 
-def eval_timeseries(timeseries, dates, fill_value=None, method=None):
-    df = pd.read_json(timeseries)
-    if df.empty:
-        df = pd.DataFrame(index=dates, columns=['0'])
+def eval_timeseries(timeseries, dates, fill_value=None, method=None, flavor=None):
+    values = json.loads(timeseries)
+    if not values:
+        result = {0: {date: None for date in dates}}
     else:
-        df = df.reindex(pd.DatetimeIndex(dates))
-        if fill_value is not None:
-            df.fillna(value=fill_value, inplace=True)
-        elif method:
-            df.fillna(method=method)
-
-    result = df.to_json(date_format='iso')
-
-    returncode = 0
-    errormsg = 'No errors!'
-
-    return returncode, errormsg, result
+        result = {}
+        for c, vals in values.items():
+            col = int(c)
+            result[col] = {}
+            for d, val in vals.items():
+                result[col][pendulum.parse(d).to_datetime_string()] = fill_value if val is None else val
+                
+    return result
 
 
 def eval_array(array):
@@ -143,7 +139,7 @@ def parse_function(s, name, modules=()):
     code = spaces.join(lines)
 
     # final function
-    func = '''def {name}(self, date, counter):{spaces}{modules}{spaces}{spaces}{code}''' \
+    func = '''def {name}(self, date, timestep, counter):{spaces}{modules}{spaces}{spaces}{code}''' \
         .format(spaces=spaces, modules=modules, code=code, name=name)    
 
     return func
@@ -238,14 +234,12 @@ class Evaluator:
                 print(e)
             if data_type == 'timeseries' and result is None:
                 result = self.default_timeseries
-                if flavor=='pandas':
-                    result = pd.read_json(result)
 
         elif data_type == 'scalar':
             returncode, errormsg, result = eval_scalar(value.value)
 
         elif data_type == 'timeseries':
-            returncode, errormsg, result = eval_timeseries(value.value, self.dates_as_string, fill_value=fill_value)
+            result = eval_timeseries(value.value, self.dates_as_string, fill_value=fill_value, flavor=flavor)
 
         elif data_type == 'array':
             returncode, errormsg, result = eval_array(value.value)
@@ -295,7 +289,8 @@ class Evaluator:
             values = []
             #dates = self.current_dates[self.tsi: self.tsf] # or self.dates_as_string
             for date in self.dates[self.tsi:self.tsf]:
-                value = globals()[myfuncs[key]](self, date, counter=counter + 1)
+                timestep = self.tsi + 1
+                value = globals()[myfuncs[key]](self, date=date, timestep=timestep, counter=counter + 1)
                 values.append(value)
                 if self.data_type != 'timeseries':
                     break
@@ -307,11 +302,15 @@ class Evaluator:
                         result = pd.DataFrame.from_records(data=values, index=dates_idx, columns=cols).to_json(date_format='iso')
                     elif flavor == 'pandas':
                         result = pd.DataFrame.from_records(data=values, index=dates_idx, columns=cols)
+                    elif flavor == 'dict':
+                        result = {c: {d: v for d, v in zip(dates_idx, values)} for c in cols}
                 else:
                     if flavor is None:
                         result = pd.DataFrame(data=values, index=dates_idx).to_json(date_format='iso')
                     elif flavor == 'pandas':
                         result = pd.DataFrame(data=values, index=dates_idx)
+                    elif flavor == 'dict':
+                        result = {0: {d: v for d, v in zip(dates_idx, values)}}
             else:
                 result = values[0]
         except Exception as err:  # other error
