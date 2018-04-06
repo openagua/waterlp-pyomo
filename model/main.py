@@ -19,8 +19,6 @@ from utils import create_subscenarios
 
 from copy import copy
 
-import wingdbstub
-
 def run_scenarios(args, log):
     """
         This is a wrapper for running all the scenarios, where scenario runs are

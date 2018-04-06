@@ -11,8 +11,6 @@ import pendulum
 
 myfuncs = {}
 
-#import wingdbstub
-
 def get_scenarios_data(conn, scenario_ids, **kwargs):
     
     evaluator = Evaluator(conn, settings=kwargs['settings'], data_type=kwargs['data_type'])
