@@ -80,7 +80,7 @@ def create_model(name, template, nodes, links, types, ts_idx, params, blocks, de
     m.linkDeliveryDB = Var(m.LinkBlocks * m.TS, domain=NonNegativeReals)
     m.nodeStorage = Var(m.Storage * m.TS, domain=NonNegativeReals) # storage
     
-    m.nodeDemandDeficit = Var(m.NodeBlocks * m.TS, domain=NonNegativeReals, initialize=0.0)
+    #m.nodeDemandDeficit = Var(m.NodeBlocks * m.TS, domain=NonNegativeReals, initialize=0.0)
     
     #m.nodeStorageDB = Var(m.Storage)
     #m.nodeFulfillmentDB = Var(m.NodeBlocks * m.TS, domain=NonNegativeReals) # Percent of delivery fulfilled (i.e., 1 - % shortage)
@@ -146,7 +146,8 @@ def create_model(name, template, nodes, links, types, ts_idx, params, blocks, de
         if j in m.Reservoir:
             loss = m.nodeNetEvaporation[j,t]
         elif j in m.DemandNodes:
-            loss = m.nodeLocalLoss[j,t] + m.nodeDelivery[j,t] * m.nodeConsumptiveLoss[j,t] / 100
+            #loss = m.nodeLocalLoss[j,t] + m.nodeDelivery[j,t] * m.nodeConsumptiveLoss[j,t] / 100
+            loss = m.nodeLocalLoss[j,t] + m.nodeDelivery[j,t] # new concept is that delivery = lost  
         elif j in m.Groundwater:
             loss = m.nodeLocalLoss[j,t]
         else:
@@ -190,13 +191,14 @@ def create_model(name, template, nodes, links, types, ts_idx, params, blocks, de
             # deliveries to demand nodes (urban, ag, general) must equal actual inflows
             # note the use of local gains & losses: local sources such as precipitation can be included in deliveries
             # TODO: make this more sophisticated to account for more specific gains and losses (basically, everything except consumptive losses; this might be left to the user to add precip, etc. as part of a local gain function)
-            return m.nodeDelivery[j,t] == m.nodeInflow[j,t] + m.nodeLocalGain[j,t] - m.nodeLocalLoss[j,t]
+            #return m.nodeDelivery[j,t] == m.nodeInflow[j,t] + m.nodeLocalGain[j,t] - m.nodeLocalLoss[j,t]
+            return m.nodeDelivery[j,t] == m.nodeInflow[j,t] - m.nodeOutflow[j,t] + m.nodeLocalGain[j,t] - m.nodeLocalLoss[j,t] # assumption is that demand is accounted for as a loss
         else:
             # delivery cannot exceed sum of inflows
             # TODO: update this to also include local gains and losses (at, for example, flow requirement nodes)
             return m.nodeDelivery[j,t] <= sum(m.linkOutflow[i,j,t] for i in m.NodesIn[j])
     m.NodeDelivery_rule = Constraint(m.Nodes, m.TS, rule=NodeDelivery_rule)
-        
+    
     def NodeBlock_rule(m, j, b, t):
         '''Delivery blocks cannot exceed their corresponding demand blocks.
         By extension, deliveries cannot exceed demands.
@@ -204,10 +206,10 @@ def create_model(name, template, nodes, links, types, ts_idx, params, blocks, de
         return m.nodeDeliveryDB[j,b,t] <= m.nodeDemand[j,b,t]
     m.NodeBlock_constraint = Constraint(m.NodeBlocks, m.TS, rule=NodeBlock_rule)
 
-    def DemandDeficit_rule(m, j, b, t):
-        '''Demand deficit definition'''
-        return m.nodeDemandDeficit[j, b, t] == m.nodeDemand[j, b, t] - m.nodeDeliveryDB[j, b, t]
-    m.NodeDemandDeficit_constraint = Constraint(m.NodeBlocks, m.TS, rule=DemandDeficit_rule)
+    #def DemandDeficit_rule(m, j, b, t):
+        #'''Demand deficit definition'''
+        #return m.nodeDemandDeficit[j, b, t] == m.nodeDemand[j, b, t] - m.nodeDeliveryDB[j, b, t]
+    #m.NodeDemandDeficit_constraint = Constraint(m.NodeBlocks, m.TS, rule=DemandDeficit_rule)
 
     #def LinkBlock_rule(m, i, j, b, t):
         #'''Link flow blocks cannot exceed their corresponding demand blocks.'''
