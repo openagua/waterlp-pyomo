@@ -111,7 +111,7 @@ def run_scenarios(args, log):
             subscenario_count = len(option_subscenarios) * len(scenario_subscenarios)
             
             if args.debug:
-                system.nruns = min(10, system.nruns)
+                system.nruns = min(args.debug_ts, system.nruns)
                 system.dates = system.dates[:system.nruns]
                 system.dates_as_string = system.dates_as_string[:system.nruns]
                 
@@ -209,8 +209,9 @@ def commandline_parser():
                         help='''URL and port that is listening for activity.''')
     parser.add_argument('--guid', default=uuid.uuid4().hex, dest='unique_id',
                         help='''Unique identifier for this run.''')
-    parser.add_argument('--debug_lp', dest='debug_lp', action='store_true', help='''Debug flag for the Pyomo model.''')        
     parser.add_argument('--debug', dest='debug', action='store_true', help='''Debug flag.''')
+    parser.add_argument('--debug_ts', dest='debug_ts', type=int, default=10, help='''The number of timesteps to run in debug mode.''')        
+    parser.add_argument('--debug_lp', dest='debug_lp', action='store_true', help='''Debug flag for the Pyomo model.''')            
     parser.add_argument('--c', dest='custom', type=dict, default={},
                         help='''Custom arguments passed as stringified JSON.''')
     parser.add_argument('--dest', dest='destination', default='source', help='''Destination of results. Options for now include "source" or "aws_s3"''')
