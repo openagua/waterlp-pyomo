@@ -63,9 +63,15 @@ def get_scenario_data(evaluator, **kwargs):
     return scenario_data
 
 
-def empty_data_timeseries(dates):
+def empty_data_timeseries(dates, date_format='iso', flavor='json'):
     values = [None] * len(dates)
-    timeseries = pd.DataFrame({'0': values}, index=dates).to_json(date_format='iso')
+    if flavor == 'json':
+        if date_format == 'iso':
+            timeseries = pd.DataFrame({'0': values}, index=dates).to_json(date_format='iso')
+        elif date_format == 'original':
+            timeseries = pd.DataFrame({'0': values}, index=dates, parse_dates=False)
+    elif flavor == 'dict':
+        timeseries = pd.DataFrame({0: values}, index=dates).to_dict()
     return timeseries
 
 
@@ -97,18 +103,22 @@ def eval_descriptor(s):
     return returncode, errormsg, result
 
 
-def eval_timeseries(timeseries, dates, fill_value=None, method=None):
+def eval_timeseries(timeseries, dates, date_format, fill_value=None, method=None, flavor=None):
     df = pd.read_json(timeseries)
     if df.empty:
         df = pd.DataFrame(index=dates, columns=['0'])
     else:
-        df = df.reindex(pd.DatetimeIndex(dates))
+        #df = df.reindex(pd.DatetimeIndex(dates))
         if fill_value is not None:
             df.fillna(value=fill_value, inplace=True)
         elif method:
             df.fillna(method=method)
 
-    result = df.to_json(date_format='iso')
+    if flavor is None or flavor == 'json':
+        result = df.to_json(date_format=date_format)
+    elif flavor == 'dict':
+        df.index = df.index.strftime(date_format)
+        result = df.to_dict()
 
     returncode = 0
     errormsg = 'No errors!'
@@ -143,13 +153,13 @@ def parse_function(s, name, modules=()):
     code = spaces.join(lines)
 
     # final function
-    func = '''def {name}(self, date, counter):{spaces}{modules}{spaces}{spaces}{code}''' \
+    func = '''def {name}(self, date, timestep, counter):{spaces}{modules}{spaces}{spaces}{code}''' \
         .format(spaces=spaces, modules=modules, code=code, name=name)    
 
     return func
 
 
-def make_dates(settings, date_format=True):
+def make_dates(settings, date_format=None):
 
     # TODO: Make this more advanced - this should be pulled out into a different library available to all
     timestep = settings.get('timestep')
@@ -169,14 +179,17 @@ def make_dates(settings, date_format=True):
             d3 = dt.last_of('month')
             dates.extend([d1, d2, d3])
     
-    dates_as_string = [date.to_datetime_string() for date in dates]
+    if date_format is None:
+        dates_as_string = [date.to_datetime_string() for date in dates]
+    else:
+        dates_as_string = [date.strftime(date_format) for date in dates]
 
     return dates_as_string, dates
 
 
-def make_default_value(data_type, dates=None):
+def make_default_value(data_type, dates=None, flavor='json', date_format='iso'):
     if data_type == 'timeseries':
-        default_eval_value = empty_data_timeseries(dates)
+        default_eval_value = empty_data_timeseries(dates, flavor=flavor, date_format=date_format)
     elif data_type == 'array':
         default_eval_value = '[[],[]]'
     else:
@@ -199,11 +212,12 @@ class InnerSyntaxError(SyntaxError):
 class Evaluator:
     def __init__(self, conn=None, scenario_id=None, settings=None, date_format=None, data_type=None):
         self.conn = conn
-        self.dates_as_string, self.dates = make_dates(settings)
+        self.date_format = date_format
+        self.dates_as_string, self.dates = make_dates(settings, date_format=date_format)
         #self.current_dates = None
         self.scenario_id = scenario_id
         self.data_type = data_type
-        self.default_timeseries = make_default_value('timeseries', self.dates_as_string)
+        self.default_timeseries = make_default_value('timeseries', self.dates_as_string, flavor='dict', date_format='original')
         self.default_array = make_default_value('array')
 
         self.calculators = {}
@@ -238,14 +252,13 @@ class Evaluator:
                 print(e)
             if data_type == 'timeseries' and result is None:
                 result = self.default_timeseries
-                if flavor=='pandas':
-                    result = pd.read_json(result)
 
         elif data_type == 'scalar':
             returncode, errormsg, result = eval_scalar(value.value)
 
         elif data_type == 'timeseries':
-            returncode, errormsg, result = eval_timeseries(value.value, self.dates_as_string, fill_value=fill_value)
+
+            returncode, errormsg, result = eval_timeseries(value.value, self.dates_as_string, self.date_format, fill_value=fill_value, flavor=flavor)
 
         elif data_type == 'array':
             returncode, errormsg, result = eval_array(value.value)
@@ -295,7 +308,8 @@ class Evaluator:
             values = []
             #dates = self.current_dates[self.tsi: self.tsf] # or self.dates_as_string
             for date in self.dates[self.tsi:self.tsf]:
-                value = globals()[myfuncs[key]](self, date, counter=counter + 1)
+                timestep = self.tsi + 1
+                value = globals()[myfuncs[key]](self, date=date, timestep=timestep, counter=counter + 1)
                 values.append(value)
                 if self.data_type != 'timeseries':
                     break
@@ -307,11 +321,15 @@ class Evaluator:
                         result = pd.DataFrame.from_records(data=values, index=dates_idx, columns=cols).to_json(date_format='iso')
                     elif flavor == 'pandas':
                         result = pd.DataFrame.from_records(data=values, index=dates_idx, columns=cols)
+                    elif flavor == 'dict':
+                        result = {c: {d: v for d, v in zip(dates_idx, values)} for c in cols}
                 else:
                     if flavor is None:
                         result = pd.DataFrame(data=values, index=dates_idx).to_json(date_format='iso')
                     elif flavor == 'pandas':
                         result = pd.DataFrame(data=values, index=dates_idx)
+                    elif flavor == 'dict':
+                        result = {0: {d: v for d, v in zip(dates_idx, values)}}
             else:
                 result = values[0]
         except Exception as err:  # other error

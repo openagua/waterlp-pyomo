@@ -19,7 +19,7 @@ from utils import create_subscenarios
 
 from copy import copy
 
-#import wingdbstub
+import wingdbstub
 
 def run_scenarios(args, log):
     """
@@ -68,6 +68,7 @@ def run_scenarios(args, log):
         network=conn.network,
         template=conn.template,
         attrs=attrs,
+        date_format=args.hydra_timestep_format,
         settings=conn.network.layout.get('settings'),
         args=args,
     )
@@ -112,7 +113,7 @@ def run_scenarios(args, log):
             subscenario_count = len(option_subscenarios) * len(scenario_subscenarios)
             
             if args.debug:
-                system.nruns = min(365, system.nruns)
+                system.nruns = min(10, system.nruns)
                 system.dates = system.dates[:system.nruns]
                 system.dates_as_string = system.dates_as_string[:system.nruns]
                 
