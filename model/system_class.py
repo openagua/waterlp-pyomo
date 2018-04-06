@@ -593,39 +593,35 @@ class WaterSystem(object):
         for idx in self.instance.linkPriority:
             getattr(self.instance, 'linkValueDB')[idx] = lowval - (getattr(self.instance, 'linkPriority')[idx].value or lowval)
 
-
     def collect_results(self, timesteps, include_all=False, write_input=True):
         
-        all_records = []
-
         # loop through all the model parameters and variables
-        for p in self.instance.component_objects(Param):
-            if write_input or p.name in ['nodeDemand', 'nodeObservedDelivery']:
-                records = self.store(p, timesteps, is_var=False, include_all=include_all)
-                all_records.extend(records)
+        for param in self.instance.component_objects(Param):
+            if write_input or param.name in ['nodeDemand', 'nodeObservedDelivery']:
+                self.store_results(param, timesteps, is_var=False, include_all=include_all)
                 
-        for v in self.instance.component_objects(Var):
-            records = self.store(v, timesteps, is_var=True, include_all=include_all)
-            all_records.extend(records)
+        for var in self.instance.component_objects(Var):
+            self.store_results(var, timesteps, is_var=True, include_all=include_all)
         
-        #self.recorder.record(all_records)
-        # todo: fix this routine!
+    def store_results(self, param, timesteps, is_var, include_all=None):
+        
+        if param.name not in self.params:
+            return
 
-    def store(self, p, timesteps, is_var, include_all=None):
-
-        if p.name not in self.results:
-            self.results[p.name] = {}
+        if param.name not in self.results:
+            self.results[param.name] = {}
             
-        records = []
-
         # collect to results
-        for v in p.values():  # loop through parameter values
-            try:
-                idx = v.index()
-            except:
-                continue
+        #for v in p.values():  # loop through parameter values
+        #for idx in getattr(self.instance, p.name):
+        for idx, p in param.items():
+            #try:
+                #idx = v.index()
+            #except:
+                #continue
             
-            rt = p.name[:4]
+            #rt = p.name[:4]
+            rt = self.params[param.name]['resource_type']
             if is_var:
 
                 # this assumes that all decision variables are time series
@@ -637,39 +633,17 @@ class WaterSystem(object):
                 time_idx = type(idx) != int and idx[-1]
         
             if time_idx is not False and time_idx==0 or include_all:  # index[-1] is time
-                
-                if rt=='node':
-                    resource = self.nodes.get(res_idx if type(res_idx)==int else res_idx[0])
-                elif rt=='link':
-                    resource = self.links.get(res_idx[:2])
-                else:
-                    rt = 'network'
-                    resource = self.network
-                
-                if res_idx not in self.results[p.name]:  # idx[:-1] is node/link + block, if any
-                    self.results[p.name][res_idx] = OrderedDict()
+                                
+                if res_idx not in self.results[param.name]:  # idx[:-1] is node/link + block, if any
+                    self.results[param.name][res_idx] = OrderedDict()
                     
                 timestamp = timesteps[time_idx]
-                val = v.value if v.value is None else float(v.value)
+                #val = v.value if v.value is None else float(v.value)
                     
-                # TODO: We should do one or the other (or both?)
-                # 1) save results for writing later back to Hydra Platform
-                self.results[p.name][res_idx][timestamp] = val
-        
-                # or 2) save single time step results to write back via real-time recorder
-                # NB: we can make this more efficient through better DB design (follow Hyrda Platform schema?)
-                #records.append({
-                    #'network_id': self.network.id,
-                    #'option': self.option.name,
-                    #'scenario': self.scenario.name,
-                    #'resource_type': rt,
-                    #'resource': resource.name,
-                    #'attribute': p.name,
-                    #'timestamp': timestamp,
-                    #'value': val
-                #});
-                
-        return records
+                self.results[param.name][res_idx][timestamp] = p.value
+
+            
+            
 
     def save_results(self):
         
