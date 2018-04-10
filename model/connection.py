@@ -3,7 +3,6 @@ import json
 from attrdict import AttrDict
 from requests import post
 
-#import wingdbstub
 
 class connection(object):
 
@@ -18,10 +17,10 @@ class connection(object):
         self.template_id = int(args.template_id) if args.template_id else None
 
         get_network_params = dict(
-            network_id = self.network_id,
-            include_data = 'Y',
-            scenario_ids = scenario_ids,
-            summary = 'N'
+            network_id=self.network_id,
+            include_data='Y',
+            scenario_ids=scenario_ids,
+            summary='N'
         )
         if self.template_id:
             get_network_params.update({'template_id': self.template_id})
@@ -33,7 +32,7 @@ class connection(object):
             response = self.call('get_network', get_network_params)
 
         self.network = response
-        
+
         self.template_id = self.template_id or self.network.layout.get('active_template_id')
 
         self.template = self.template_id and self.call('get_template', {'template_id': self.template_id})
@@ -80,10 +79,11 @@ class connection(object):
         for l in self.network.links:
             for ra in l.attributes:
                 if ra.attr_id in self.attrs.link:
-                    self.res_attr_lookup['link'][(l.node_1_id, l.node_2_id, self.attrs.link[ra.attr_id]['name'])] = ra.id
+                    self.res_attr_lookup['link'][
+                        (l.node_1_id, l.node_2_id, self.attrs.link[ra.attr_id]['name'])] = ra.id
                     self.attr_ids[ra.id] = ra.attr_id
                     self.raid_to_res_name[ra.id] = l.name
-                
+
     def call(self, func, args):
 
         data = json.dumps({func: args})
@@ -96,10 +96,10 @@ class connection(object):
             try:
                 content = json.loads(response.content.decode(), object_hook=JSONObject)
                 fc, fs = content['faultcode'], content['faultstring']
-                #print(content)
+                # print(content)
             except:
                 print('Something went wrong. Check command sent.')
-                print("URL: %s"%self.url)
+                print("URL: %s" % self.url)
                 print("Call: %s" % data)
 
                 if response.content != '':
@@ -108,9 +108,9 @@ class connection(object):
                     print("Something went wrong. An unknown server has occurred.")
         else:
             content = json.loads(response.content.decode(), object_hook=JSONObject)
-            if func=='login': 
+            if func == 'login':
                 self.session_id = response.cookies['beaker.session.id']
-        
+
         return content
 
     def login(self, username=None, password=None):
@@ -118,6 +118,7 @@ class connection(object):
             err = 'Error. Username not provided.'
         self.call('login', {'username': username, 'password': password})
         return
+
 
 class JSONObject(dict):
     def __init__(self, obj_dict):

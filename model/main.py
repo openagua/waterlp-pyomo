@@ -6,7 +6,6 @@ import sys
 import uuid
 from datetime import datetime
 from functools import partial
-from os.path import join
 from itertools import product
 
 from connection import connection
@@ -19,6 +18,7 @@ from utils import create_subscenarios
 
 from copy import copy
 
+
 def run_scenarios(args, log):
     """
         This is a wrapper for running all the scenarios, where scenario runs are
@@ -28,38 +28,39 @@ def run_scenarios(args, log):
 
     verbose = False
 
-    #from scenario_debug import run_scenario
+    # from scenario_debug import run_scenario
     print('')
     if args.debug:
         from scenario_debug import run_scenario
         print("DEBUG ON")
     else:
-        ## NB: scenario is the Cythonized version of scenario_main
+        # scenario is the Cythonized version of scenario_main
         print("DEBUG OFF")
         from scenario import run_scenario
 
-    args.starttime = datetime.now() # args.start_time is iso-formatted, but this is still probably redundant
-    
+    args.starttime = datetime.now()  # args.start_time is iso-formatted, but this is still probably redundant
+
     print("================================================")
     print("STARTING RUN")
     print("Start time: {}".format(args.starttime.isoformat()))
     print("================================================")
-    
+
     # ======================
     # connect to data server
     # ======================
     all_scenario_ids = list(set(sum(args.scenario_ids, ())))
     conn = connection(args=args, scenario_ids=all_scenario_ids)
-    
+
     # ====================================
     # define subscenarios (aka variations)
     # ====================================
-    
+
     # create a dictionary of network attributes
-    all_scenarios = conn.call('get_network', {'network_id': conn.network.id, 'include_data': 'N', 'summary': 'N', 'include_resources': 'N'})
+    all_scenarios = conn.call('get_network', {'network_id': conn.network.id, 'include_data': 'N', 'summary': 'N',
+                                              'include_resources': 'N'})
     template_attributes = conn.call('get_template_attributes', {'template_id': conn.template.id})
     attrs = {ta.id: {'name': ta.name} for ta in template_attributes}
-    
+
     # create the system
     base_system = WaterSystem(
         conn=conn,
@@ -72,65 +73,66 @@ def run_scenarios(args, log):
         settings=conn.network.layout.get('settings'),
         args=args,
     )
-    
+
     scenario_lookup = {}
-    
+
     all_supersubscenarios = []
-    
+
     # prepare the reporter        
     if args.message_protocol is not None:
         post_reporter = PostReporter(args)
     else:
         post_reporter = None
-        
+
     for scenario_ids in args.scenario_ids:
-        
+
         try:
             scenario_ids = list(scenario_ids)
         except:
-            scenario_ids = [scenario_ids]         
-               
-        # create the scenario class
-        scenario = Scenario(scenario_ids=scenario_ids, conn=conn, network=conn.network, args=args)        
-        
+            scenario_ids = [scenario_ids]
+
+            # create the scenario class
+        scenario = Scenario(scenario_ids=scenario_ids, conn=conn, network=conn.network, args=args)
+
         start_payload = scenario.update_payload(action='start')
-        post_reporter.start(is_main_reporter=(args.message_protocol=='post'), **start_payload) # kick off reporter with heartbeat
-                        
+        post_reporter.start(is_main_reporter=(args.message_protocol == 'post'),
+                            **start_payload)  # kick off reporter with heartbeat
+
         # create the system class
         # TODO: pass resources as dictionaries instead for quicker lookup
         option_subscenarios = create_subscenarios(conn.network, conn.template, scenario.option, 'option')
         scenario_subscenarios = create_subscenarios(conn.network, conn.template, scenario.scenario, 'scenario')
-                    
+
         try:
-            
+
             # prepare the system
             system = copy(base_system)
             system.scenario = scenario
             system.collect_source_data()
-                            
+
             # organize the subscenarios
             flattened = product(option_subscenarios, scenario_subscenarios)
             subscenario_count = len(option_subscenarios) * len(scenario_subscenarios)
-            
+
             if args.debug:
                 verbose = True
                 system.nruns = min(args.debug_ts, system.nruns)
                 system.dates = system.dates[:system.nruns]
                 system.dates_as_string = system.dates_as_string[:system.nruns]
-                
+
                 subscenario_count = min(subscenario_count, 1)
-                
+
             system.scenario.subscenario_count = subscenario_count
             system.scenario.total_steps = subscenario_count * len(system.dates)
 
             supersubscenarios = [{
-                'i': i+1,
-                'system': copy(system), # this is intended to be a shallow copy
+                'i': i + 1,
+                'system': copy(system),  # this is intended to be a shallow copy
                 'variation_sets': variation_sets,
-                } for i, variation_sets in enumerate(flattened)]
-            
+            } for i, variation_sets in enumerate(flattened)]
+
             all_supersubscenarios.extend(supersubscenarios[:subscenario_count])
-            
+
         except Exception as err:
             err_class = err.__class__.__name__
             if err_class == 'InnerSyntaxError':
@@ -138,9 +140,9 @@ def run_scenarios(args, log):
             else:
                 m = "Unknown error."
             message = "Failed to prepare system. Error: {}".format(m)
-                
+
             post_reporter.report(action="error", message=message)
-    
+
     # =======================
     # multiprocessing routine
     # =======================
@@ -157,7 +159,7 @@ def run_scenarios(args, log):
     msg = 'Running {} subscenarios in multicore mode with {} workers, {} chunks each.' \
         .format(system.scenario.subscenario_count, poolsize, chunksize)
     print(msg)
-    #log.info()
+    # log.info()
     pool.imap(p, all_supersubscenarios, chunksize=chunksize)
 
     # stop the pool
@@ -204,30 +206,35 @@ def commandline_parser():
                         help='''The main log file directory.''')
     parser.add_argument('--sol', dest='solver', default='glpk',
                         help='''The solver to use (e.g., glpk, gurobi, etc.).''')
-    #parser.add_argument('--fs', dest='foresight',
-                        #help='''Foresight: 'perfect' or 'imperfect' ''')
+    # parser.add_argument('--fs', dest='foresight',
+    # help='''Foresight: 'perfect' or 'imperfect' ''')
     parser.add_argument('--purl', dest='post_url',
                         help='''URL to ping indicating activity.''')
-    parser.add_argument('--mp', dest='message_protocol', default=None, help='''Message protocol to report progress back to client browser''')
+    parser.add_argument('--mp', dest='message_protocol', default=None,
+                        help='''Message protocol to report progress back to client browser''')
     parser.add_argument('--wurl', dest='websocket_url',
                         help='''URL and port that is listening for activity.''')
     parser.add_argument('--guid', default=uuid.uuid4().hex, dest='unique_id',
                         help='''Unique identifier for this run.''')
     parser.add_argument('--debug', dest='debug', action='store_true', help='''Debug flag.''')
-    parser.add_argument('--debug_ts', dest='debug_ts', type=int, default=10, help='''The number of timesteps to run in debug mode.''')
-    parser.add_argument('--debug_lp', dest='debug_lp', action='store_true', help='''Debug flag for the Pyomo model.''')            
+    parser.add_argument('--debug_ts', dest='debug_ts', type=int, default=10,
+                        help='''The number of timesteps to run in debug mode.''')
+    parser.add_argument('--debug_lp', dest='debug_lp', action='store_true', help='''Debug flag for the Pyomo model.''')
     parser.add_argument('--c', dest='custom', type=dict, default={},
                         help='''Custom arguments passed as stringified JSON.''')
-    parser.add_argument('--dest', dest='destination', default='source', help='''Destination of results. Options for now include "source" or "aws_s3"''')
+    parser.add_argument('--dest', dest='destination', default='source',
+                        help='''Destination of results. Options for now include "source" or "aws_s3"''')
     parser.add_argument('--wi', dest='write_input', action='store_true',
                         help='''Write input data to results.''')
     parser.add_argument('--st', dest='start_time', default=datetime.now().isoformat(), help='''Run start time.''')
-    parser.add_argument('--rkey', dest='report_api_key', default='', help='''Generic option for passing an API key for reporting to client.''')
+    parser.add_argument('--rkey', dest='report_api_key', default='',
+                        help='''Generic option for passing an API key for reporting to client.''')
 
     return parser
 
 
 args = {}
+
 
 def main():
     global args
@@ -238,17 +245,17 @@ def main():
     # log file location - based on user
 
     # initialize log directories
-    args.log_dir = join(here, 'logs', args.log_dir)
+    args.log_dir = os.path.join(here, 'logs', args.log_dir)
 
     # specify scenarios log dir
     args.scenario_log_dir = 'scenario_logs'
-    args.scenario_log_dir = join(args.log_dir, args.scenario_log_dir)
+    args.scenario_log_dir = os.path.join(args.log_dir, args.scenario_log_dir)
 
     if not os.path.exists(args.log_dir):
         os.makedirs(args.scenario_log_dir)
 
     # create top-level log file
-    logfile = join(args.log_dir, 'log.txt')
+    logfile = os.path.join(args.log_dir, 'log.txt')
     log = create_logger(args.app_name, logfile, '%(asctime)s - %(message)s')
 
     # pre-processing
@@ -268,4 +275,3 @@ if __name__ == '__main__':
         main()
     except Exception as e:
         print(e, file=sys.stderr)
-

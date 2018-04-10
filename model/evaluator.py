@@ -2,17 +2,16 @@ import hashlib
 import json
 import sys
 import traceback
-from ast import literal_eval
 from copy import copy
+from ast import literal_eval
 
 import pandas as pd
-from ast import literal_eval
 import pendulum
 
 myfuncs = {}
 
+
 def get_scenarios_data(conn, scenario_ids, **kwargs):
-    
     evaluator = Evaluator(conn, settings=kwargs['settings'], data_type=kwargs['data_type'])
 
     scenarios_data = []
@@ -106,7 +105,7 @@ def eval_timeseries(timeseries, dates, date_format, fill_value=None, method=None
     if df.empty:
         df = pd.DataFrame(index=dates, columns=['0'])
     else:
-        #df = df.reindex(pd.DatetimeIndex(dates))
+        # df = df.reindex(pd.DatetimeIndex(dates))
         if fill_value is not None:
             df.fillna(value=fill_value, inplace=True)
         elif method:
@@ -152,22 +151,21 @@ def parse_function(s, name, modules=()):
 
     # final function
     func = '''def {name}(self, date, timestep, counter):{spaces}{modules}{spaces}{spaces}{code}''' \
-        .format(spaces=spaces, modules=modules, code=code, name=name)    
+        .format(spaces=spaces, modules=modules, code=code, name=name)
 
     return func
 
 
 def make_dates(settings, date_format=None):
-
     # TODO: Make this more advanced - this should be pulled out into a different library available to all
     timestep = settings.get('timestep')
     start = pendulum.parse(settings.get('start'))
     end = pendulum.parse(settings.get('end'))
-    
+
     if timestep in ['day', 'week', 'month']:
         period = pendulum.period(start, end)
         dates = period.range("{}s".format(timestep))
-        
+
     elif timestep == 'thricemonthly':
         period = pendulum.period(start, end)
         dates = []
@@ -176,7 +174,7 @@ def make_dates(settings, date_format=None):
             d2 = pendulum.create(dt.year, dt.month, 20)
             d3 = dt.last_of('month')
             dates.extend([d1, d2, d3])
-    
+
     if date_format is None:
         dates_as_string = [date.to_datetime_string() for date in dates]
     else:
@@ -194,9 +192,10 @@ def make_default_value(data_type, dates=None, flavor='json', date_format='iso'):
         default_eval_value = ''
     return default_eval_value
 
+
 class InnerSyntaxError(SyntaxError):
     """Exception for syntax errors that will be defined only where the SyntaxError is made.
-    
+
     Attributes:
         expression -- input expression in which the error occurred
         message    -- explanation of the error
@@ -204,18 +203,19 @@ class InnerSyntaxError(SyntaxError):
 
     def __init__(self, expression, message):
         self.expression = expression
-        self.message = message    
-    
+        self.message = message
+
 
 class Evaluator:
     def __init__(self, conn=None, scenario_id=None, settings=None, date_format=None, data_type=None):
         self.conn = conn
         self.date_format = date_format
         self.dates_as_string, self.dates = make_dates(settings, date_format=date_format)
-        #self.current_dates = None
+        # self.current_dates = None
         self.scenario_id = scenario_id
         self.data_type = data_type
-        self.default_timeseries = make_default_value('timeseries', self.dates_as_string, flavor='dict', date_format='original')
+        self.default_timeseries = make_default_value('timeseries', self.dates_as_string, flavor='dict',
+                                                     date_format='original')
         self.default_array = make_default_value('array')
 
         self.calculators = {}
@@ -223,8 +223,8 @@ class Evaluator:
         self.data = {}
         # This stores data that can be referenced later, in both time and space. The main purpose is to minimize repeated calls to data sources, especially when referencing other networks/resources/attributes within the project. While this needs to be recreated on every new evaluation or run, within each evaluation or run this can store as much as possible for reuse.
 
-
-    def eval_data(self, value, func=None, do_eval=False, data_type=None, flavor=None, counter=0, fill_value=None, res_attr_id=None):
+    def eval_data(self, value, func=None, do_eval=False, data_type=None, flavor=None, counter=0, fill_value=None,
+                  res_attr_id=None):
         # create the data depending on data type
 
         returncode = None
@@ -243,7 +243,8 @@ class Evaluator:
         if usefn == 'Y':
             func = func if type(func) == str else ''
             try:
-                returncode, errormsg, result = self.eval_function(func, flavor=flavor, counter=counter, uid=value['id'], res_attr_id=res_attr_id)
+                returncode, errormsg, result = self.eval_function(func, flavor=flavor, counter=counter, uid=value['id'],
+                                                                  res_attr_id=res_attr_id)
             except InnerSyntaxError:
                 raise
             except Exception as e:
@@ -256,7 +257,8 @@ class Evaluator:
 
         elif data_type == 'timeseries':
 
-            returncode, errormsg, result = eval_timeseries(value.value, self.dates_as_string, self.date_format, fill_value=fill_value, flavor=flavor)
+            returncode, errormsg, result = eval_timeseries(value.value, self.dates_as_string, self.date_format,
+                                                           fill_value=fill_value, flavor=flavor)
 
         elif data_type == 'array':
             returncode, errormsg, result = eval_array(value.value)
@@ -300,11 +302,11 @@ class Evaluator:
                 raise
             except Exception:
                 raise
-        
+
         try:
             # CORE EVALUATION ROUTINE
             values = []
-            #dates = self.current_dates[self.tsi: self.tsf] # or self.dates_as_string
+            # dates = self.current_dates[self.tsi: self.tsf] # or self.dates_as_string
             for date in self.dates[self.tsi:self.tsf]:
                 timestep = self.tsi + 1
                 value = globals()[myfuncs[key]](self, date=date, timestep=timestep, counter=counter + 1)
@@ -316,7 +318,8 @@ class Evaluator:
                 if type(values[0]) in (list, tuple):
                     cols = range(len(values[0]))
                     if flavor is None:
-                        result = pd.DataFrame.from_records(data=values, index=dates_idx, columns=cols).to_json(date_format='iso')
+                        result = pd.DataFrame.from_records(data=values, index=dates_idx, columns=cols).to_json(
+                            date_format='iso')
                     elif flavor == 'pandas':
                         result = pd.DataFrame.from_records(data=values, index=dates_idx, columns=cols)
                     elif flavor == 'dict':
