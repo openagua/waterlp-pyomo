@@ -2,13 +2,10 @@ from math import sqrt
 import json
 from collections import OrderedDict
 import pandas as pd
-from evaluator import Evaluator
 from pyomo.environ import Var, Param
 from datetime import datetime as dt
 
-
-
-# from pymongo import MongoClient
+from evaluator import Evaluator
 
 def convert_type_name(n):
     n = n.title()
@@ -649,12 +646,14 @@ class WaterSystem(object):
 
             # the purpose of this addition is to aggregate blocks, if any, thus eliminating the need for Pandas
             # on the other hand, it should be checked which is faster: Pandas group_by or simple addition here
+            
+            val = 0 or round(p.value, 6)
 
             if has_blocks:
-                self.results[param.name][res_idx][timestamp] = (p.value or 0) + self.results[param.name][res_idx].get(
+                self.results[param.name][res_idx][timestamp] = val + self.results[param.name][res_idx].get(
                     timestamp, 0)
             else:
-                self.results[param.name][res_idx][timestamp] = p.value or 0
+                self.results[param.name][res_idx][timestamp] = val
         return
 
     def save_results(self):
@@ -866,19 +865,19 @@ class WaterSystem(object):
                     if pid not in self.conn.res_attr_lookup[rt]:
                         continue
 
-                    has_blocks = ta.properties.get('has_blocks') \
-                                 or rt == 'node' and len(idx) == 2 \
-                                 or rt == 'link' and len(idx) == 3
+                    #has_blocks = ta.properties.get('has_blocks') \
+                                 #or rt == 'node' and len(idx) == 2 \
+                                 #or rt == 'link' and len(idx) == 3
 
-                    if has_blocks:
-                        block = 0 if len(idx) == n else idx[n]
-                        df = pd.DataFrame.from_dict({(res_name, block): values})
-                    else:
-                        df = pd.DataFrame.from_dict({res_name: values})
-                    df_all = pd.concat([df_all, df], axis=1)
+                    #if has_blocks:
+                        #block = 0 if len(idx) == n else idx[n]
+                        #df = pd.DataFrame.from_dict({(res_name, block): values})
+                    #else:
+                        #df = pd.DataFrame.from_dict({res_name: values})
+                    df_all = pd.concat([df_all, df_all], axis=1)
 
-                summed = df_all.groupby(axis=1, level=0).sum()
-                content = summed.round(5).to_csv().encode()
+                #summed = df_all.groupby(axis=1, level=0).sum()
+                content = df_all.round(5).to_csv().encode()
 
                 s3.put_object(Body=content, Bucket='openagua.org', Key=path.format(parameter=param_name))
 
