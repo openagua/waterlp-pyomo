@@ -26,6 +26,8 @@ def run_scenarios(args, log):
         possible.
     """
 
+    verbose = False
+
     #from scenario_debug import run_scenario
     print('')
     if args.debug:
@@ -111,6 +113,7 @@ def run_scenarios(args, log):
             subscenario_count = len(option_subscenarios) * len(scenario_subscenarios)
             
             if args.debug:
+                verbose = True
                 system.nruns = min(args.debug_ts, system.nruns)
                 system.dates = system.dates[:system.nruns]
                 system.dates_as_string = system.dates_as_string[:system.nruns]
@@ -141,9 +144,9 @@ def run_scenarios(args, log):
     # =======================
     # multiprocessing routine
     # =======================
-    
-    p = partial(run_scenario, conn=conn, args=args)
-    
+
+    p = partial(run_scenario, conn=conn, args=args, verbose=verbose)
+
     # set multiprocessing parameters
     poolsize = mp.cpu_count()
     maxtasks = None
@@ -155,12 +158,13 @@ def run_scenarios(args, log):
         .format(system.scenario.subscenario_count, poolsize, chunksize)
     print(msg)
     #log.info()
-    pools = pool.imap(p, all_supersubscenarios, chunksize=chunksize)
+    pool.imap(p, all_supersubscenarios, chunksize=chunksize)
 
     # stop the pool
     pool.close()
     pool.join()
     return
+    # run_scenario(all_supersubscenarios[0], conn=conn, args=args)
 
 
 def commandline_parser():
@@ -210,7 +214,7 @@ def commandline_parser():
     parser.add_argument('--guid', default=uuid.uuid4().hex, dest='unique_id',
                         help='''Unique identifier for this run.''')
     parser.add_argument('--debug', dest='debug', action='store_true', help='''Debug flag.''')
-    parser.add_argument('--debug_ts', dest='debug_ts', type=int, default=10, help='''The number of timesteps to run in debug mode.''')        
+    parser.add_argument('--debug_ts', dest='debug_ts', type=int, default=10, help='''The number of timesteps to run in debug mode.''')
     parser.add_argument('--debug_lp', dest='debug_lp', action='store_true', help='''Debug flag for the Pyomo model.''')            
     parser.add_argument('--c', dest='custom', type=dict, default={},
                         help='''Custom arguments passed as stringified JSON.''')

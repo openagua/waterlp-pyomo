@@ -14,7 +14,7 @@ from ably_reporter import AblyReporter
 current_step = 0
 total_steps = 0    
         
-def run_scenario(supersubscenario, conn=None, args=None):
+def run_scenario(supersubscenario, conn=None, args=None, verbose=False):
     
     global current_step, total_steps
     
@@ -40,7 +40,7 @@ def run_scenario(supersubscenario, conn=None, args=None):
     
     try:
         
-        for result in _run_scenario(system, args, conn, supersubscenario, reporter=reporter):
+        for result in _run_scenario(system, args, conn, supersubscenario, reporter=reporter, verbose=verbose):
             pass            
            
     except Exception as e:
@@ -59,7 +59,7 @@ def run_scenario(supersubscenario, conn=None, args=None):
         if reporter:
             reporter.report(action='error', message=msg)
 
-def _run_scenario(system=None, args=None, conn=None, supersubscenario=None, reporter=None):
+def _run_scenario(system=None, args=None, conn=None, supersubscenario=None, reporter=None, verbose=False):
     global current_step, total_steps
     
     debug = args.debug
@@ -140,7 +140,7 @@ def _run_scenario(system=None, args=None, conn=None, supersubscenario=None, repo
             #if verbose:
                 #logd.info('Optimal feasible solution found.')
 
-            system.collect_results(current_dates_as_string, write_input=args.write_input)
+            system.collect_results(current_dates_as_string, tsidx=i, write_input=args.write_input)
 
             #if verbose:
                 #logd.info('Results saved.')
@@ -193,7 +193,9 @@ def _run_scenario(system=None, args=None, conn=None, supersubscenario=None, repo
         else:
             system.save_results()
             reporter and reporter.report(action='done')
-            #logd.info('done run')
+            
+            if verbose:
+                print('finished')
 
         #if verbose:
             #logd.info(
@@ -212,4 +214,4 @@ def _run_scenario(system=None, args=None, conn=None, supersubscenario=None, repo
 
     # POSTPROCESSING HERE (IF ANY)
 
-    #reporter.done(current_step, total_steps)
+    #reporter.done(current_step, total_steps
