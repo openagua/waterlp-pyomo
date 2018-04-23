@@ -22,10 +22,10 @@ class Reporter:
             payload = {**self.base_payload, **payload}
         return requests.post('{}/{}'.format(self._post_url, action), json=payload)    
     
-    def report(self, action, **payload):
+    def report(self, **payload):
         action = payload.get('action')
         if self.updater:
-            payload = self.updater(action=action, **payload)
+            payload = self.updater(**payload)
         if action=='step':
             elapsed_time = round(time.time() - self.start_time)
             if elapsed_time % 2 == 0 and elapsed_time != self.old_elapsed_time or payload.get('progress')==100:

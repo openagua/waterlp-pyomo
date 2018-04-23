@@ -7,6 +7,7 @@ from datetime import datetime as dt
 
 from evaluator import Evaluator
 
+
 def convert_type_name(n):
     n = n.title()
     for char in [' ', '/', '-']:
@@ -595,10 +596,10 @@ class WaterSystem(object):
         lowval = 100
         for idx in self.instance.nodePriority:
             getattr(self.instance, 'nodeValueDB')[idx] = lowval - (
-                        getattr(self.instance, 'nodePriority')[idx].value or lowval)
+                    getattr(self.instance, 'nodePriority')[idx].value or lowval)
         for idx in self.instance.linkPriority:
             getattr(self.instance, 'linkValueDB')[idx] = lowval - (
-                        getattr(self.instance, 'linkPriority')[idx].value or lowval)
+                    getattr(self.instance, 'linkPriority')[idx].value or lowval)
 
     def collect_results(self, timesteps, tsidx, include_all=False, write_input=True):
 
@@ -639,14 +640,14 @@ class WaterSystem(object):
 
             has_blocks = rt == 'link' and len(idx) > 3 or len(idx) > 2
 
-            if tsidx == 0:  # idx[:-1] is node/link + block, if any
+            if tsidx == 0 and res_idx not in self.results[param.name]:  # idx[:-1] is node/link + block, if any
                 self.results[param.name][res_idx] = {}
 
             timestamp = timesteps[time_idx]
 
             # the purpose of this addition is to aggregate blocks, if any, thus eliminating the need for Pandas
             # on the other hand, it should be checked which is faster: Pandas group_by or simple addition here
-            
+
             val = 0 or round(p.value, 6)
 
             if has_blocks:
@@ -685,8 +686,8 @@ class WaterSystem(object):
                                                  'layout': {
                                                      'class': 'results', 'sources': self.scenario.base_ids,
                                                      'tags': self.scenario.tags,
-                                                     # 'modified_date': mod_date,
-                                                     # 'modified_by': self.args.uid
+                                                      'modified_date': mod_date,
+                                                      'modified_by': self.args.user_id
                                                  }
                                              }})
         else:
@@ -705,7 +706,7 @@ class WaterSystem(object):
         res_names = {}
 
         try:
-            count = 1
+            count = 0
             pcount = 1
             nparams = len(self.results)
             for param_name, param_values in self.results.items():
@@ -749,6 +750,8 @@ class WaterSystem(object):
 
                 # create datasets from values
                 for pid, dataset_value in dataset_values.items():
+                    
+                    count += 1
 
                     # define the dataset value
                     # first, aggregate blocks
@@ -773,26 +776,22 @@ class WaterSystem(object):
                     res_scens.append(rs)
                     mb += len(value.encode()) * 1.1 / 1e6  # large factor of safety
 
-                    if mb > 10 or count == nparams:
-                        self.conn.call('update_resourcedata', {
-                            'scenario_id': result_scenario['id'],
-                            'resource_scenarios': res_scens[:-1]
-                        })
+                    if mb > 20 or count == nparams:
+                        result_scenario['resource_scenarios'] = res_scens[:-1]
+                        self.conn.call('update_scenario', {'scen': result_scenario, 'return_summary': 'Y'})
                         if count % 10 == 0 or pcount == nparams:
                             if self.scenario.reporter:
-                                self.scenario.reporter.report(action='save',
-                                                              saved=round(count / (self.nparams + self.nvars) * 100))
-                        count += len(res_scens)
+                                self.scenario.reporter.report(
+                                    action='save',
+                                    saved=round(count / (self.nparams + self.nvars) * 100))
 
                         # purge just-uploaded scenarios
                         res_scens = res_scens[-1:]
                         mb = 0
 
             # upload the last remaining resource scenarios
-            resp = self.conn.call('update_resourcedata', {
-                'scenario_id': result_scenario['id'],
-                'resource_scenarios': res_scens
-            })
+            result_scenario['resource_scenarios'] = res_scens
+            self.conn.call('update_scenario', {'scen': result_scenario, 'return_summary': 'Y'})
             if self.scenario.reporter:
                 self.scenario.reporter.report(action='save', saved=round(count / (self.nparams + self.nvars) * 100))
 
@@ -865,19 +864,19 @@ class WaterSystem(object):
                     if pid not in self.conn.res_attr_lookup[rt]:
                         continue
 
-                    #has_blocks = ta.properties.get('has_blocks') \
-                                 #or rt == 'node' and len(idx) == 2 \
-                                 #or rt == 'link' and len(idx) == 3
+                    # has_blocks = ta.properties.get('has_blocks') \
+                    # or rt == 'node' and len(idx) == 2 \
+                    # or rt == 'link' and len(idx) == 3
 
-                    #if has_blocks:
-                        #block = 0 if len(idx) == n else idx[n]
-                        #df = pd.DataFrame.from_dict({(res_name, block): values})
-                    #else:
-                        #df = pd.DataFrame.from_dict({res_name: values})
-                    df_all = pd.concat([df_all, df_all], axis=1)
+                    # if has_blocks:
+                    # block = 0 if len(idx) == n else idx[n]
+                    # df = pd.DataFrame.from_dict({(res_name, block): values})
+                    # else:
+                    df = pd.DataFrame.from_dict({res_name: values})
+                    df_all = pd.concat([df_all, df], axis=1)
 
-                #summed = df_all.groupby(axis=1, level=0).sum()
-                content = df_all.round(5).to_csv().encode()
+                # summed = df_all.groupby(axis=1, level=0).sum()
+                content = df_all.to_csv().encode()
 
                 s3.put_object(Body=content, Bucket='openagua.org', Key=path.format(parameter=param_name))
 

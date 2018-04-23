@@ -27,7 +27,10 @@ class AblyReporter(object):
         if self.updater:
             payload = self.updater(action=action, **payload)
         if action in ['step', 'save']:
-            self.channel.publish(action, payload)
+            try:
+                self.channel.publish(action, payload)
+            except:
+                pass # for now, this is probably a "rate limit exceeded" error, and harmless
         else:
             self.post_reporter.report(**payload)
             return

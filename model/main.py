@@ -18,6 +18,8 @@ from utils import create_subscenarios
 
 from copy import copy
 
+from scenario_main import run_scenario
+
 
 def run_scenarios(args, log):
     """
@@ -31,12 +33,11 @@ def run_scenarios(args, log):
     # from scenario_debug import run_scenario
     print('')
     if args.debug:
-        from scenario_debug import run_scenario
+        #from scenario_debug import run_scenario
         print("DEBUG ON")
     else:
         # scenario is the Cythonized version of scenario_main
         print("DEBUG OFF")
-        from scenario import run_scenario
 
     args.starttime = datetime.now()  # args.start_time is iso-formatted, but this is still probably redundant
 
@@ -146,28 +147,27 @@ def run_scenarios(args, log):
     # =======================
     # multiprocessing routine
     # =======================
+    
+    if args.debug:
+        run_scenario(all_supersubscenarios[0], conn=conn, args=args)
+        return
+    else:
+        p = partial(run_scenario, conn=conn, args=args, verbose=verbose)
 
-    p = partial(run_scenario, conn=conn, args=args, verbose=verbose)
+        # set multiprocessing parameters
+        poolsize = mp.cpu_count()
+        maxtasks = None
+        chunksize = 1
+        pool = mp.Pool(processes=poolsize, maxtasksperchild=maxtasks)
+        
+        msg = 'Running {} subscenarios in multicore mode with {} workers, {} chunks each.' \
+            .format(system.scenario.subscenario_count, poolsize, chunksize)
+        print(msg)
 
-    # set multiprocessing parameters
-    poolsize = mp.cpu_count()
-    maxtasks = None
-    chunksize = 1
-
-    pool = mp.Pool(processes=poolsize, maxtasksperchild=maxtasks)
-
-    msg = 'Running {} subscenarios in multicore mode with {} workers, {} chunks each.' \
-        .format(system.scenario.subscenario_count, poolsize, chunksize)
-    print(msg)
-    # log.info()
-    pool.imap(p, all_supersubscenarios, chunksize=chunksize)
-
-    # stop the pool
-    pool.close()
-    pool.join()
-    return
-    # run_scenario(all_supersubscenarios[0], conn=conn, args=args)
-
+        pool.imap(p, all_supersubscenarios, chunksize=chunksize)
+        pool.close()
+        pool.join()
+        return
 
 def commandline_parser():
     """

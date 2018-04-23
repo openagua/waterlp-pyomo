@@ -1,3 +1,4 @@
 model/logs/
 *.wpr
 *.wpu
+.idea

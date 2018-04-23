@@ -100,6 +100,8 @@ def create_model(name, template, nodes, links, types, ts_idx, params, blocks, de
     m.nodeSpill = Var(m.Reservoir * m.TS, domain=NonNegativeReals) # uncontrolled/undesired release to a river
     m.emptyStorage = Var(m.Reservoir * m.TS, domain=NonNegativeReals) # empty storage space
 
+    m.groundwaterLoss = Var(m.Groundwater * m.TS, domain=NonNegativeReals) # added for J. Soper to allow groundwater nodes to overflow
+
     # PARAMETERS
     
     # TODO: replace this with explicit declarations
@@ -149,7 +151,7 @@ def create_model(name, template, nodes, links, types, ts_idx, params, blocks, de
             #loss = m.nodeLocalLoss[j,t] + m.nodeDelivery[j,t] * m.nodeConsumptiveLoss[j,t] / 100
             loss = m.nodeLocalLoss[j,t] + m.nodeDelivery[j,t] # new concept is that delivery = lost  
         elif j in m.Groundwater:
-            loss = m.nodeLocalLoss[j,t]
+            loss = m.nodeLocalLoss[j,t] + m.groundwaterLoss[j,t]
         else:
             loss = m.nodeLocalLoss[j,t]
         if debug:
@@ -288,8 +290,7 @@ def create_model(name, template, nodes, links, types, ts_idx, params, blocks, de
             return summation(m.nodeValueDB, m.nodeDeliveryDB) - 1000 * summation(m.debugGain) - 1000 * summation(m.debugLoss)
         else:
             return summation(m.nodeValueDB, m.nodeDeliveryDB)
-        #return sum((m.nodeValueDB[j,b,t] * (m.nodeDemand[j,b,t] - m.nodeDeliveryDB[j,b,t])**2.0) for (j, b) in m.NodeBlocks for t in m.TS)
-
+        
         #return sum((m.nodeValueDB[j,b,t] * m.nodeDeliveryDB[j,b,t]) for (j, b) in m.NodeBlocks for t in m.TS)
 
     m.Objective = Objective(rule=Objective_fn, sense=maximize)

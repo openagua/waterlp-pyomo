@@ -109,6 +109,9 @@ def _run_scenario(system=None, args=None, conn=None, supersubscenario=None, repo
 
         ts = runs[i]
         current_step = i + 1
+        
+        if verbose:
+            print('current step: %s' % current_step)
 
         # if user requested to stop
         # if reporter._is_canceled:

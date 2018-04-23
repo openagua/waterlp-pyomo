@@ -14,4 +14,4 @@ RUN pip3 install pyomo
 WORKDIR ~
 ADD /model /model
 WORKDIR /model
-RUN python3 ./setup.py build_ext --inplace
+#RUN python3 ./setup.py build_ext --inplace

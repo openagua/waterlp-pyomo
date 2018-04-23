@@ -86,7 +86,11 @@ class Scenario(object):
                 'action': action,
                 'status': statuses.get(action, 'unknown')
             })
-            if action == 'step':
+            if action == 'start':
+                payload.update({
+                    'progress': 0,
+                })
+            elif action == 'step':
                 payload.update({
                     'progress': self.finished / self.total_steps * 100
                 })
