@@ -1,2 +1,2 @@
-docker build -t openagua/waterlp-mcma .
-docker push openagua/waterlp-mcma
+docker build -t openagua/waterlp-general .
+docker push openagua/waterlp-general

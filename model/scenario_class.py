@@ -32,7 +32,8 @@ class Scenario(object):
         
         self.scenario_ids = scenario_ids
         self.unique_id = args.unique_id + '-' + '-'.join(str(s_id) for s_id in scenario_ids)
-        
+        self.time_step = ''
+
         for i, base_id in enumerate(scenario_ids):
             #if i and source.id in self.source_ids:
                 #continue # this is a baseline scenario; already accounted for
@@ -40,7 +41,7 @@ class Scenario(object):
             source = [s for s in network.scenarios if s.id == base_id][0]
             self.base_scenarios.append(source)
             self.source_scenarios[base_id] = source
-        
+
             this_chain = [source.id]
     
             # TODO: pull this chaining info from list of scenarios rather than hitting Hydra Platform multiple times
@@ -52,10 +53,18 @@ class Scenario(object):
                     source = loaded_scenarios[parent_id]
                 else:
                     source = conn.call('get_scenario', {'scenario_id': parent_id})
+
                 self.source_scenarios[source.id] = source
+
+            # source should not have a parent at this point, so this should be for the baseline scenario
+            self.time_step = max(self.time_step, source.get('time_step', ''))
+
             this_chain.reverse()
-            self.source_ids.extend(this_chain)
-        
+            if i == 0:
+                self.source_ids = this_chain
+            else:
+                self.source_ids.extend(this_chain[1:])
+
         self.base_ids = []
         for s in self.base_scenarios:
             self.base_ids.append(s.id)
@@ -71,6 +80,15 @@ class Scenario(object):
             
         self.option = self.base_scenarios[0]
         self.scenario = self.base_scenarios[-1]
+
+        # add time step info
+        self.start_time = '0000'
+        self.end_time = '9999'
+
+        for source in self.source_scenarios.values():
+            self.start_time = max(self.start_time, source.get('start_time', '0000'))
+            self.end_time = min(self.end_time, source.get('end_time', '9999'))
+
         
     def update_payload(self, action=None, **payload):
         payload.update({
