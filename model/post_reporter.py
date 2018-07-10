@@ -4,10 +4,10 @@ import threading
 import json
 import time
 
-#import wingdbstub
 
 class Reporter:
     """This reporter posts a message to the OpenAgua API. It is mostly just a passthrough, with payload being defined outside."""
+
     def __init__(self, args):
 
         self._post_url = args.post_url
@@ -15,37 +15,37 @@ class Reporter:
         self._canceled = False
         self.updater = None
         self.is_main_reporter = False
-        
+
     def send(self, **payload):
         action = payload.get('action')
         if self.is_main_reporter:
             payload = {**self.base_payload, **payload}
-        return requests.post('{}/{}'.format(self._post_url, action), json=payload)    
-    
+        return requests.post('{}/{}'.format(self._post_url, action), json=payload)
+
     def report(self, **payload):
         action = payload.get('action')
         if self.updater:
             payload = self.updater(**payload)
-        if action=='step':
+        if action == 'step':
             elapsed_time = round(time.time() - self.start_time)
-            if elapsed_time % 2 == 0 and elapsed_time != self.old_elapsed_time or payload.get('progress')==100:
+            if elapsed_time % 2 == 0 and elapsed_time != self.old_elapsed_time or payload.get('progress') == 100:
                 self.send(**payload)
             self.old_elapsed_time = elapsed_time
-            
-        if action=='error':
+
+        if action == 'error':
             if self.is_main_reporter:
                 self._cancel_heartbeat()
             payload['extra_info'] = payload.get('message')
         return self.send(**payload)
-            
+
     def start(self, is_main_reporter=True, **payload):
         self.is_main_reporter = is_main_reporter
         if is_main_reporter:
-            #self._init_heartbeat()
+            # self._init_heartbeat()
             self.start_time = time.time()
             self.old_elapsed_time = 0
             self.base_payload = payload
-        self.report(**payload)
+        self.send(**payload)
 
     def _init_heartbeat(self):
         self.heartbeat_timer = threading.Timer(5, self._heartbeat).start()
@@ -72,7 +72,6 @@ class Reporter:
         self._init_heartbeat()
 
     def _cancel_heartbeat(self):
-        #if self.heartbeat_timer is not None:
-            #self.heartbeat_timer.cancel()
+        # if self.heartbeat_timer is not None:
+        # self.heartbeat_timer.cancel()
         return
-        

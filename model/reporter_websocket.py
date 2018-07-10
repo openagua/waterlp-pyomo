@@ -4,16 +4,17 @@ import json
 import threading
 import websockets
 
+
 # import wingdbstub
 
 class Reporter:
     def __init__(self, args):
         self.flavor = 'websocket'
-        
+
         self._ws_url = args.websocket_url
         self._id = args.unique_id
-        self._source_id=int(args.source_id)
-        self._network_id=int(args.network_id)
+        self._source_id = int(args.source_id)
+        self._network_id = int(args.network_id)
         self._paused = False
         self._canceled = False
         self.heartbeat_timer = None
@@ -36,7 +37,7 @@ class Reporter:
             await websocket.send(json.dumps({'action': 'ping', 'data': sid}))
             # the server will send back the current state of the model so we know
             # if the user paused/resumed/stopped the run from the UI.
-            return  await websocket.recv()
+            return await websocket.recv()
 
     def ping(self, sid):
         ## since this is in it's own thread, we need to get a new event loop
