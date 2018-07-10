@@ -14,23 +14,20 @@ class AblyReporter(object):
     def on_action(self, msg):
         action = msg['action']
         if action == 'stopall' or msg['action'] == 'stop' and msg['sid'] == args.unique_id:
-            report(action='stop', progress=current_step / total_steps * 100)
+            self.report(action='stop', progress=current_step / total_steps * 100)
         elif action == 'pause':
             paused = True
-            report(action='pause', progress=current_step / total_steps * 100)
+            self.report(action='pause', progress=current_step / total_steps * 100)
         elif action == 'resume':
             paused = False
-            report(action='resume')
+            self.report(action='resume')
         
     # publish updates
     def report(self, action, **payload):
         if self.updater:
             payload = self.updater(action=action, **payload)
         if action in ['step', 'save']:
-            try:
-                self.channel.publish(action, payload)
-            except:
-                pass # for now, this is probably a "rate limit exceeded" error, and harmless
+            self.channel.publish(action, payload)
         else:
             self.post_reporter.report(**payload)
             return

@@ -33,7 +33,7 @@ def run_scenarios(args, log):
     # from scenario_debug import run_scenario
     print('')
     if args.debug:
-        #from scenario_debug import run_scenario
+        # from scenario_debug import run_scenario
         print("DEBUG ON")
     else:
         # scenario is the Cythonized version of scenario_main
@@ -58,7 +58,7 @@ def run_scenarios(args, log):
 
     # create a dictionary of network attributes
     network = conn.call('get_network', {'network_id': conn.network.id, 'include_data': 'N', 'summary': 'N',
-                                              'include_resources': 'N'})
+                                        'include_resources': 'N'})
     template_attributes = conn.call('get_template_attributes', {'template_id': conn.template.id})
     attrs = {ta.id: {'name': ta.name} for ta in template_attributes}
 
@@ -70,7 +70,8 @@ def run_scenarios(args, log):
         network=conn.network,
         template=conn.template,
         attrs=attrs,
-        date_format=args.hydra_timestep_format,
+        # date_format=args.hydra_timestep_format,
+        date_format='%Y-%m-%d %H:%M:%S',
         args=args,
     )
 
@@ -78,7 +79,7 @@ def run_scenarios(args, log):
 
     all_supersubscenarios = []
 
-    # prepare the reporter        
+    # prepare the reporter
     if args.message_protocol is not None:
         post_reporter = PostReporter(args)
     else:
@@ -149,7 +150,7 @@ def run_scenarios(args, log):
     # =======================
     # multiprocessing routine
     # =======================
-    
+
     if args.debug:
         run_scenario(all_supersubscenarios[0], conn=conn, args=args)
         return
@@ -161,7 +162,7 @@ def run_scenarios(args, log):
         maxtasks = None
         chunksize = 1
         pool = mp.Pool(processes=poolsize, maxtasksperchild=maxtasks)
-        
+
         msg = 'Running {} subscenarios in multicore mode with {} workers, {} chunks each.' \
             .format(system.scenario.subscenario_count, poolsize, chunksize)
         print(msg)
@@ -170,6 +171,7 @@ def run_scenarios(args, log):
         pool.close()
         pool.join()
         return
+
 
 def commandline_parser():
     """
@@ -220,13 +222,14 @@ def commandline_parser():
     parser.add_argument('--debug', dest='debug', action='store_true', help='''Debug flag.''')
     parser.add_argument('--debug_ts', dest='debug_ts', type=int, default=10,
                         help='''The number of timesteps to run in debug mode.''')
-    parser.add_argument('--debug_lp', dest='debug_lp', action='store_true', help='''Debug flag for the Pyomo model.''')
+    parser.add_argument('--debug_gain', dest='debug_gain', action='store_true', help='''Debug flag for the Pyomo model.''')
+    parser.add_argument('--debug_loss', dest='debug_loss', action='store_true', help='''Debug flag for the Pyomo model.''')
     parser.add_argument('--c', dest='custom', type=dict, default={},
                         help='''Custom arguments passed as stringified JSON.''')
     parser.add_argument('--dest', dest='destination', default='source',
                         help='''Destination of results. Options for now include "source" or "aws_s3"''')
-    parser.add_argument('--wi', dest='write_input', action='store_true',
-                        help='''Write input data to results.''')
+    parser.add_argument('--si', dest='suppress_input', action='store_true',
+                        help='''Suppress input from results. This can speed up writing results.''')
     parser.add_argument('--st', dest='start_time', default=datetime.now().isoformat(), help='''Run start time.''')
     parser.add_argument('--rkey', dest='report_api_key', default='',
                         help='''Generic option for passing an API key for reporting to client.''')

@@ -62,6 +62,7 @@ class connection(object):
                 })
 
         # dictionary to store resource attribute ids
+        self.resource_attributes = {}
         self.res_attr_lookup = {'node': {}, 'link': {}}
         self.attr_ids = {}
         self.raid_to_res_name = {}
@@ -113,11 +114,26 @@ class connection(object):
 
         return content
 
+    def get_res_attr_data(self, **kwargs):
+        res_attr_data = self.call(
+            'get_resource_attribute_data',
+            dict(
+                ref_key=kwargs['ref_key'].upper(),
+                ref_id=kwargs['ref_id'],
+                scenario_id=kwargs['scenario_id'],
+                attr_id=kwargs['attr_id'] if 'attr_id' in kwargs else None
+            )
+        )
+        return res_attr_data
+
     def login(self, username=None, password=None):
         if username is None:
             err = 'Error. Username not provided.'
         self.call('login', {'username': username, 'password': password})
         return
+
+    def dump_results(self, resource_scenario):
+        return self.call('update_scenario', {'scen': resource_scenario, 'return_summary': 'Y'})
 
 
 class JSONObject(dict):
