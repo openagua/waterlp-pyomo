@@ -37,8 +37,9 @@ def run_scenario(supersubscenario, conn=None, args=None, verbose=False):
 
     try:
 
-        for result in _run_scenario(system, args, conn, supersubscenario, reporter=reporter, verbose=verbose):
-            pass
+        # for result in _run_scenario(system, args, conn, supersubscenario, reporter=reporter, verbose=verbose):
+        #     pass
+        _run_scenario(system, args, supersubscenario, reporter=reporter, verbose=verbose)
 
     except Exception as e:
 
@@ -57,7 +58,7 @@ def run_scenario(supersubscenario, conn=None, args=None, verbose=False):
             reporter.report(action='error', message=msg)
 
 
-def _run_scenario(system=None, args=None, conn=None, supersubscenario=None, reporter=None, verbose=False):
+def _run_scenario(system=None, args=None, supersubscenario=None, reporter=None, verbose=False):
     global current_step, total_steps
 
     debug = args.debug
@@ -77,14 +78,14 @@ def _run_scenario(system=None, args=None, conn=None, supersubscenario=None, repo
     system.init_pyomo_params()
     system.model = create_model(
         name=system.name,
-        template=system.template,
         nodes=list(system.nodes.keys()),
         links=list(system.links.keys()),
         types=system.ttypes,
         ts_idx=system.ts_idx,
         params=system.params,
         blocks=system.blocks,
-        debug=args.debug_lp
+        debug_gain=args.debug_gain,
+        debug_loss=args.debug_loss
     )
 
     system.instance = system.model.create_instance()
@@ -103,7 +104,7 @@ def _run_scenario(system=None, args=None, conn=None, supersubscenario=None, repo
 
         ts = runs[i]
         current_step = i + 1
-        
+
         if verbose:
             print('current step: %s' % current_step)
 
@@ -121,28 +122,14 @@ def _run_scenario(system=None, args=None, conn=None, supersubscenario=None, repo
 
         # solve the model
         results = optimizer.solve(system.instance)
-        # system.instance.solutions.load_from(results)
-
-        # print & save summary results
-        # if verbose:
-        # old_stdout = sys.stdout
-        # sys.stdout = summary = StringIO()
-        # logd.info('model solved\n' + summary.getvalue())
 
         if (results.solver.status == SolverStatus.ok) \
                 and (results.solver.termination_condition == TerminationCondition.optimal):
-            # this is feasible and optimal
-            # if verbose:
-            # logd.info('Optimal feasible solution found.')
-
-            system.collect_results(current_dates_as_string, tsidx=i, write_input=args.write_input)
-
-            # if verbose:
-            # logd.info('Results saved.')
+            system.collect_results(current_dates_as_string, tsidx=i, suppress_input=args.suppress_input)
 
         elif results.solver.termination_condition == TerminationCondition.infeasible:
             system.save_results()
-            msg = 'ERROR: Problem is infeasible at step {} of {} ({}). Prior results have been saved.'.format(
+            msg = 'ERROR: Problem is infeasible at step {} of {} ({}). Partial results have been saved.'.format(
                 current_step, total_steps, current_dates[0]
             )
             if system.scenario.reporter:
@@ -151,26 +138,16 @@ def _run_scenario(system=None, args=None, conn=None, supersubscenario=None, repo
 
         else:
             system.save_results()
-            # something else is wrong
-            msg = 'ERROR: Something went wrong. Likely the model was not built correctly.'
+            msg = 'ERROR: Something went wrong at step {} of {} ({}). This might indicate an infeasibility, but not necessarily.'.format(
+                current_step, total_steps, current_dates[0]
+            )
             print(msg)
-            # logd.info(msg)
-            payload = system.scenario.update_payload(action='error', payload={'message': msg})
             if system.scenario.reporter:
                 system.scenario.reporter.report(action='error', message=msg)
             break
 
-        # if foresight_periods == 1:
-        # print("Writing results...")
-        # results.write()
-
-        # else:
-
         # load the results
-        # print("Loading results...")
         system.instance.solutions.load_from(results)
-        # if verbose:
-        # sys.stdout = old_stdout
 
         system.scenario.finished += 1
 
@@ -180,9 +157,12 @@ def _run_scenario(system=None, args=None, conn=None, supersubscenario=None, repo
         # update the model instance
         if ts != runs[-1]:
             ts_next = runs[i + 1]
-            system.update_initial_conditions()
-            system.update_boundary_conditions(ts, ts + system.foresight_periods)
-            system.update_internal_params()  # update internal parameters that depend on user-defined variables
+            try:
+                system.update_initial_conditions()
+                system.update_boundary_conditions(ts_next, ts_next + system.foresight_periods)
+                system.update_internal_params()  # update internal parameters that depend on user-defined variables
+            except:
+                raise
             system.instance.preprocess()
 
         else:
@@ -205,7 +185,7 @@ def _run_scenario(system=None, args=None, conn=None, supersubscenario=None, repo
 
         i += 1
 
-        yield
+        # yield
 
     # POSTPROCESSING HERE (IF ANY)
 
