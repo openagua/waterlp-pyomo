@@ -11,7 +11,7 @@ current_step = 0
 total_steps = 0
 
 
-def run_scenario(supersubscenario, conn=None, args=None, verbose=False):
+def run_scenario(supersubscenario, args=None, verbose=False):
     global current_step, total_steps
 
     system = supersubscenario.get('system')
@@ -25,8 +25,7 @@ def run_scenario(supersubscenario, conn=None, args=None, verbose=False):
         post_reporter.is_main_reporter = True
         reporter = post_reporter
     elif args.message_protocol == 'ably':  # i.e. www.ably.io
-        ably_reporter = AblyReporter(args, post_reporter=post_reporter)
-        reporter = ably_reporter
+        reporter = AblyReporter(args, post_reporter=post_reporter)
 
     if reporter:
         reporter.updater = system.scenario.update_payload
@@ -67,15 +66,8 @@ def _run_scenario(system=None, args=None, supersubscenario=None, reporter=None, 
     # current_dates = system.dates[0:foresight_periods]
 
     # intialize
-    system.prepare_params()
+    system.initialize(supersubscenario)
 
-    # set up subscenario
-    system.setup_subscenario(supersubscenario)
-
-    # initialize boundary conditions
-    system.update_boundary_conditions(0, system.foresight_periods, initialize=True)
-
-    system.init_pyomo_params()
     system.model = create_model(
         name=system.name,
         nodes=list(system.nodes.keys()),
@@ -134,7 +126,7 @@ def _run_scenario(system=None, args=None, supersubscenario=None, reporter=None, 
             )
             if system.scenario.reporter:
                 system.scenario.reporter.report(action='error', message=msg)
-            break
+            raise Exception(msg)
 
         else:
             system.save_results()
@@ -144,12 +136,13 @@ def _run_scenario(system=None, args=None, supersubscenario=None, reporter=None, 
             print(msg)
             if system.scenario.reporter:
                 system.scenario.reporter.report(action='error', message=msg)
-            break
+            raise Exception(msg)
 
         # load the results
         system.instance.solutions.load_from(results)
 
         system.scenario.finished += 1
+        system.scenario.current_date = current_dates_as_string[0]
 
         if system.scenario.reporter:
             system.scenario.reporter.report(action='step')
@@ -159,10 +152,20 @@ def _run_scenario(system=None, args=None, supersubscenario=None, reporter=None, 
             ts_next = runs[i + 1]
             try:
                 system.update_initial_conditions()
-                system.update_boundary_conditions(ts_next, ts_next + system.foresight_periods)
+                system.update_boundary_conditions(ts, ts + system.foresight_periods, 'intermediary')
+                system.update_boundary_conditions(ts_next, ts_next + system.foresight_periods, 'model')
                 system.update_internal_params()  # update internal parameters that depend on user-defined variables
             except:
-                raise
+                # we can still save results to-date
+                system.save_results()
+                msg = 'ERROR: Something went wrong at step {} of {} ({}). There is something wrong with the model. Results to-date have been saved'.format(
+                    current_step, total_steps, current_dates[0]
+                )
+                print(msg)
+                if system.scenario.reporter:
+                    system.scenario.reporter.report(action='error', message=msg)
+
+                raise Exception(msg)
             system.instance.preprocess()
 
         else:
@@ -171,17 +174,6 @@ def _run_scenario(system=None, args=None, supersubscenario=None, reporter=None, 
 
             if verbose:
                 print('finished')
-
-        # if verbose:
-        # logd.info(
-        # 'completed timestep {date} | {timestep}/{total_timesteps}'.format(
-        # date=system.dates[ts],
-        # timestep=ts+1,
-        # total_timesteps=nruns
-        # )
-        # )
-
-        #######################
 
         i += 1
 

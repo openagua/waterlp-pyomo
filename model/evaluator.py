@@ -3,7 +3,7 @@ import json
 import sys
 import traceback
 from copy import copy
-from ast import literal_eval
+from numpy import mean
 
 import pandas as pd
 import pendulum
@@ -71,11 +71,11 @@ def empty_data_timeseries(dates, nblocks=1, date_format='iso', flavor='json'):
                 timeseries = pd.DataFrame(vals, index=dates).to_json(date_format='iso')
             elif date_format == 'original':
                 timeseries = pd.DataFrame(vals, index=dates)
-        elif flavor == 'dict':
-            vals = {b: values for b in range(nblocks)}
-            timeseries = pd.DataFrame(vals, index=dates).to_dict()
         elif flavor == 'pandas':
             timeseries = pd.DataFrame(values, columns=range(nblocks), index=dates)
+        else:
+            vals = {b: values for b in range(nblocks)}
+            timeseries = pd.DataFrame(vals, index=dates).to_dict()
         return timeseries
     except:
         raise
@@ -121,9 +121,9 @@ def eval_timeseries(timeseries, dates, fill_value=None, method=None, flavor=None
             elif method:
                 df.fillna(method=method)
 
-        if flavor is None or flavor == 'json':
+        if flavor == 'json':
             result = df.to_json(date_format=date_format)
-        elif flavor == 'dict':
+        else:
             df.index = df.index.strftime(date_format)
             result = df.to_dict()
 
@@ -137,14 +137,15 @@ def eval_timeseries(timeseries, dates, fill_value=None, method=None, flavor=None
 
 def eval_array(array):
     try:
-        array = literal_eval(array)
+        result = json.loads(array)
         returncode = 0
         errormsg = 'No errors!'
     except:
+        result = array
         returncode = 1
         errormsg = 'Something is wrong.'
 
-    return returncode, errormsg, array
+    return returncode, errormsg, result
 
 
 def parse_function(s, name, argnames, modules=()):
@@ -183,15 +184,15 @@ def make_dates(settings, date_format=True, data_type='timeseries'):
         period = pendulum.period(pendulum.parse(start), pendulum.parse(end))
 
         if timestep in ['day', 'week', 'month']:
-            dates = period.range("{}s".format(timestep))
+            dates = list(period.range("{}s".format(timestep)))
         elif timestep == 'thricemonthly':
             dates = []
             start = pendulum.parse(start)
             end = pendulum.parse(end)
             period = pendulum.period(start, end)
             for dt in period.range('months'):
-                d1 = pendulum.create(dt.year, dt.month, 10)
-                d2 = pendulum.create(dt.year, dt.month, 20)
+                d1 = pendulum.datetime(dt.year, dt.month, 10)
+                d2 = pendulum.datetime(dt.year, dt.month, 20)
                 d3 = dt.last_of('month')
                 dates.extend([d1, d2, d3])
 
@@ -251,19 +252,21 @@ class Evaluator:
 
         self.namespace = namespace
 
-        self.argnames = ['counter', 'timestep', 'date', 'flavor']  # arguments accepted by the function evaluator
+        self.argnames = ['parentkey', 'counter', 'timestep', 'date',
+                         'flavor']  # arguments accepted by the function evaluator
 
         self.calculators = {}
 
-        self.data = {}
         # This stores data that can be referenced later, in both time and space.
         # The main purpose is to minimize repeated calls to data sources, especially
         # when referencing other networks/resources/attributes within the project.
         # While this needs to be recreated on every new evaluation or run, within
         # each evaluation or run this can store as much as possible for reuse.
+        self.store = {}
+        self.hashstore = {}
 
-    def eval_data(self, value, func=None, do_eval=False, data_type=None, flavor=None, counter=0, fill_value=None,
-                  date_format='iso', has_blocks=False):
+    def eval_data(self, value, func=None, do_eval=False, flavor=None, counter=0, fill_value=None,
+                  date_format='iso', has_blocks=False, parentkey=None):
 
         try:
             # create the data depending on data type
@@ -273,19 +276,17 @@ class Evaluator:
             result = None
 
             # metadata = json.loads(resource_scenario.value.metadata)
-            metadata = json.loads(value.metadata)
+            metadata = json.loads(value.get('metadata', '{}'))
             if func is None:
                 func = metadata.get('function')
             usefn = metadata.get('use_function', 'N') == 'Y'
-            # if value is None:
-            #     value = value.value
-            data_type = value.type
+            data_type = value['type']
 
             if usefn:
                 func = func if type(func) == str else ''
                 try:
                     returncode, errormsg, result = self.eval_function(func, flavor=flavor, counter=counter,
-                                                                      has_blocks=has_blocks)
+                                                                      has_blocks=has_blocks, parentkey=parentkey)
                 except InnerSyntaxError:
                     raise
                 except Exception as e:
@@ -311,11 +312,14 @@ class Evaluator:
             if do_eval:
                 return returncode, errormsg, result
             else:
-                return result
+                if returncode:
+                    raise Exception(errormsg)
+                else:
+                    return result
         except:
             raise
 
-    def eval_function(self, code_string, counter=None, flavor=None, has_blocks=False):
+    def eval_function(self, code_string, counter=None, parentkey=None, flavor=None, has_blocks=False):
 
         # assume there will be an exception:
         err_class = None
@@ -325,21 +329,21 @@ class Evaluator:
         detail = None
         value = None
 
-        key = hashlib.sha224(str.encode(code_string)).hexdigest()
+        hashkey = hashlib.sha224(str.encode(code_string)).hexdigest()
 
         # check if we already know about this function so we don't
         # have to do duplicate (possibly expensive) execs
         # if key not in self.myfuncs:
-        if not hasattr(self.namespace, key):
+        if not hasattr(self.namespace, hashkey):
             try:
                 # create the string defining the wrapper function
                 # Note: functions can't start with a number so pre-pend "func_"
-                func_name = "func_{}".format(key)
+                func_name = "func_{}".format(hashkey)
                 func = parse_function(code_string, name=func_name, argnames=self.argnames)
                 # TODO : exec is unsafe
                 exec(func, globals())
                 # self.myfuncs[key] = func_name
-                setattr(self.namespace, key, eval(func_name))
+                setattr(self.namespace, hashkey, eval(func_name))
             except Exception as e:
                 print(e)
             except SyntaxError as err:  # syntax error
@@ -349,34 +353,39 @@ class Evaluator:
 
         try:
             # CORE EVALUATION ROUTINE
-            values = []
-            for timestep, date in enumerate(self.dates[self.tsi:self.tsf]):
-                # value = self.myfuncs[key](self, date, counter=counter + 1)
-                value = getattr(self.namespace, key)(self, date=date, timestep=timestep + 1, counter=counter + 1,
-                                                     flavor=flavor)
-                values.append(value)
+            if hashkey not in self.hashstore:
+                self.hashstore[hashkey] = [0 for d in self.dates]
+            tsi = self.tsi
+            tsf = self.tsf
+            for i, date in enumerate(self.dates[tsi:tsf]):
+                timestep = self.dates.index(date)
+                value = getattr(self.namespace, hashkey)(self, hashkey=hashkey, date=date, timestep=timestep + 1,
+                                                         counter=counter + 1, flavor=flavor, parentkey=parentkey)
+                self.hashstore[hashkey][timestep] = value
                 if self.data_type != 'timeseries':
                     break
+
+            values = self.hashstore[hashkey][tsi:tsf]
             if self.data_type == 'timeseries' or self.data_type == 'periodic timeseries':
-                dates_idx = self.dates_as_string[self.tsi:self.tsf]
+                dates_idx = self.dates_as_string[tsi:tsf]
                 if type(values[0]) in (list, tuple):
                     cols = range(len(values[0]))
                     if flavor is None:
-                        result = pd.DataFrame.from_records(data=values, index=dates_idx,
-                                                           columns=cols).to_json(date_format='iso')
-                    elif flavor == 'pandas':
-                        result = pd.DataFrame.from_records(data=values, index=dates_idx, columns=cols)
-                    elif flavor == 'dict':
                         if has_blocks:
                             result = {c: {d: v[c] for d, v in zip(dates_idx, values)} for c in cols}
                         else:
                             result = {d: v[0] for d, v in zip(dates_idx, values)}
+                    elif flavor == 'pandas':
+                        result = pd.DataFrame.from_records(data=values, index=dates_idx, columns=cols)
+                    elif flavor == 'json':
+                        result = pd.DataFrame.from_records(data=values, index=dates_idx, columns=cols).to_json(
+                            date_format='iso')
                 else:
-                    if flavor is None:
+                    if flavor == 'json':
                         result = pd.DataFrame(data=values, index=dates_idx).to_json(date_format='iso')
                     elif flavor == 'pandas':
                         result = pd.DataFrame(data=values, index=dates_idx)
-                    elif flavor == 'dict':
+                    else:
                         if has_blocks:
                             result = {0: {d: v for d, v in zip(dates_idx, values)}}
                         else:
@@ -403,57 +412,140 @@ class Evaluator:
         return returncode, errormsg, result
 
     def GET(self, key, **kwargs):
-        '''This sets self.data from self.calculate. It is only used if a function contains self.DATA, which is added by a preprocessor'''
-
-        date = kwargs.get('date')
-        counter = kwargs.get('counter')
-        flavor = kwargs.get('flavor', 'pandas')
-        offset = kwargs.get('offset')
-
-        parts = key.split('/')
-        ref_key, ref_id, attr_id = parts
-        ref_id = int(ref_id)
-        attr_id = int(attr_id)
-        result = None
-
-        # if key not in self.data:
-        # resource_scenario = self.conn.get_res_attr_data(
-        #     ref_key=ref_key.upper(),
-        #     ref_id=int(ref_id),
-        #     scenario_id=[self.scenario_id],
-        #     attr_id=int(attr_id)
-        # )
-
-        rs_value = self.rs_values.get((ref_key, ref_id, attr_id))
+        '''
+        This is used to get data from another variable, or another time step, possibly aggregated
+        '''
 
         try:
-            attr = self.conn.attrs[ref_key][attr_id]
-            has_blocks = attr['name'] in self.block_params
-            eval_data = self.eval_data(
-                value=rs_value,
-                do_eval=False,
-                flavor=flavor,
-                counter=counter,
-                has_blocks=has_blocks,
-                date_format='%Y-%m-%d %H:%M:%S'
-            )
 
-            value = eval_data
+            hashkey = kwargs.get('hashkey')
+            parentkey = kwargs.get('parentkey')
+            date = kwargs.get('date')
+            date_as_string = date.to_datetime_string()
+            counter = kwargs.get('counter')
+            offset = kwargs.get('offset')
+            timestep = kwargs.get('timestep')
+            start = kwargs.get('start')
+            end = kwargs.get('end', date)
+            agg = kwargs.get('agg', 'mean')
+
+            parts = key.split('/')
+            ref_key, ref_id, attr_id = parts
+            ref_id = int(ref_id)
+            attr_id = int(attr_id)
+
+            result = None
+
+            rs_value = self.rs_values.get((ref_key, ref_id, attr_id))
+
+            # calculate offset
+            if offset:
+                offset_timestep = self.dates.index(date) + offset + 1
+            else:
+                offset_timestep = timestep
+
+            if rs_value['type'] == 'timeseries':
+                if key not in self.store:
+                    self.store[key] = {}
+                offset_date = self.dates[offset_timestep - 1]
+                offset_date_as_string = offset_date.to_datetime_string()
+
+                result = self.store[key].get(offset_date_as_string)
+
+            flavor = kwargs.get('flavor')
+            tattr = self.conn.tattrs[(ref_key, ref_id, attr_id)]
+            has_blocks = tattr['attr_name'] in self.block_params
+            # need to evaluate the data anew only as needed
+            # tracking parent key prevents stack overflow
+            if key != parentkey and rs_value is not None \
+                    and rs_value['value'] is not None and \
+                    (not result or start):
+                eval_data = self.eval_data(
+                    value=rs_value,
+                    do_eval=False,
+                    flavor=flavor,
+                    counter=counter,
+                    parentkey=key,
+                    has_blocks=has_blocks,
+                    date_format='%Y-%m-%d %H:%M:%S'
+                )
+
+                value = eval_data
+            else:
+                value = None
+
+            result = value
 
             if self.data_type == 'timeseries':
-                if offset:
-                    date_offset = self.dates.index(date) + offset
-                    date = self.dates[date_offset]
-                datetime = date.to_datetime_string()
-                if flavor == 'pandas':
-                    result = value.loc[datetime]
-                elif flavor == 'dict':
-                    if has_blocks:
-                        result = {c: value[c][datetime] for c in value.keys()}
+                if rs_value['type'] == 'timeseries':
+
+                    # store results from get function
+                    if key not in self.store:
+                        self.store[key] = {}
+
+                    if start:
+                        if type(start) == str:
+                            start = pendulum.parse(start)
+                        if type(end) == str:
+                            end = pendulum.parse(end)
+
+                        if key != parentkey:
+                            if flavor == 'pandas':
+                                result = value.loc[start.to_datetime_string():end.to_datetime_string()].agg(agg)[0]
+                            else:
+                                idx_start = self.dates.index(start)
+                                idx_end = self.dates.index(end)
+                                value = value[0]  # assume single series
+                                # TODO: update to accommodate blocks
+                                values = list(value.values())[idx_start:idx_end]
+                                if agg == 'sum':
+                                    result = sum(values)
+                                elif agg == 'mean':
+                                    result = sum(values) / len(values)
+
+                        else:
+                            result = None
+
                     else:
-                        result = value.get(datetime) or value.get(0, {}).get(datetime, 0)
-            else:
-                result = value
+
+                        # is the result already available?
+                        result = self.store[key].get(offset_date_as_string)
+
+                        if result is None:
+
+                            if key == parentkey:
+                                # this is for cases where we are getting from a previous time step in a top-level function
+                                result = self.hashstore[hashkey][offset_timestep - 1]
+                            else:
+                                if flavor == 'pandas':
+                                    if has_blocks:
+                                        result = value.loc[offset_date_as_string]
+                                    else:
+                                        result = value.loc[offset_date_as_string][0]
+                                else:
+                                    if has_blocks:
+                                        result = {c: value[c][offset_date_as_string] for c in value.keys()}
+                                    else:
+                                        result = value.get(offset_date_as_string) or value.get(0, {}).get(
+                                            offset_date_as_string, 0)
+
+                    if date_as_string not in self.store[key]:
+                        self.store[key][date_as_string] = result
+
+
+                elif rs_value.type == 'array':
+
+                    result = self.store.get(key)
+
+                    if result is None:
+
+                        if flavor == 'pandas':
+                            result = pd.DataFrame(value)
+                        else:
+                            result = value
+
+                        # store results from get function
+                        self.store[key] = result
 
             return result
 
