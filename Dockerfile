@@ -8,10 +8,11 @@ RUN apt-get install -y glpk-utils
 RUN apt-get install -y python3 python3-pip
 RUN pip3 install --upgrade pip
 
-COPY requirements.txt requirements.txt
+COPY requirements.txt /home/requirements.txt
+ADD /model /home/model
+
+WORKDIR /home
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-WORKDIR ~
-ADD /model /model
 WORKDIR /model
 #RUN python3 ./setup.py build_ext --inplace
