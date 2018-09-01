@@ -23,13 +23,13 @@ def convert_attr_name(n):
 
 
 def get_param_name(resource_type, attr_name):
-    # IMPORTANT! rt-name combinations should be unique! This can be resolved in two ways:
+    # IMPORTANT! resource_type-name combinations should be unique! This can be resolved in two ways:
     # 1. append the dimension to the param name, or
     # 2. use a unique internal name for all variables (e.g., reservoir_demand, urban_demand)
-    # then use this unique internal name instead of the rt-name scheme.
+    # then use this unique internal name instead of the resource_type-name scheme.
     # Number two is var preferable
 
-    return '{rt}{name}'.format(rt=resource_type.lower(), name=convert_attr_name(attr_name))
+    return '{resource_type}{name}'.format(resource_type=resource_type.lower(), name=convert_attr_name(attr_name))
 
 
 def perturb(val, variation):
@@ -57,32 +57,12 @@ def perturb(val, variation):
         return val
 
 
-# class Recorder(object):
-#     def __init__(self, flavor, host, port, database, username=None, password=None):
-#
-#         self.flavor = flavor
-#         if flavor == 'mongodb':
-#             client = MongoClient(host, port)
-#             db = client[database]
-#             self.results_collection = db['results']
-#
-#     def record(self, records):
-#
-#         if self.flavor == 'mongodb':
-#             if type(records) != list:
-#                 records = list(records)
-#             try:
-#                 self.results_collection.insert_many(records)
-#             except:
-#                 pass
-
-
 def addsubblocks(values, param_name, subblocks):
     nsubblocks = len(subblocks)
 
     new_values = {}
 
-    if param_name == 'nodeDemand':
+    if param_name in ['nodeStorageDemand', 'nodeDemand']:
         new_vals = {}
         try:
             for block in values:
@@ -106,18 +86,18 @@ def addsubblocks(values, param_name, subblocks):
 
 class WaterSystem(object):
 
-    def __init__(self, conn, name, network, all_scenarios, template, attrs, args, settings=None, date_format='iso',
+    def __init__(self, conn, name, network, all_scenarios, template, args, settings=None, date_format='iso',
                  session=None, reporter=None, scenario=None):
 
+        # Both of these are now converted to cubic meters (per time step)
         self.VOLUMETRIC_FLOW_RATE_CONST = 60 * 60 * 24 / 1e6
-        self.ACRE_FEET_TO_VOLUME = 43559.9 / 1e6 * 1e3  # NOTE: model units are TAF, not AF
+        self.TAF_TO_VOLUME = 1e3 * 43560 / 1e6  # NOTE: model units are TAF, not AF
 
         self.conn = conn
         self.session = session
         self.name = name
         self.scenario = scenario
         self.template = template
-        self.attrs = attrs
         self.reporter = reporter
         self.args = args
         self.date_format = date_format
@@ -127,28 +107,11 @@ class WaterSystem(object):
 
         self.foresight = args.foresight  # pending further development
 
-        # self.evaluator = Evaluator(self.conn, settings=settings, date_format=date_format)
-        # self.dates = self.evaluator.dates
-        # self.dates_as_string = self.evaluator.dates_as_string
-        #
-        # # timestep deltas
-        # self.tsdeltas = {}
-        #
-        # # user the dates in evaluator because we've already incurred the expense of parsing the date.
-        # self.tsdeltas = dict((self.dates_as_string[i], self.evaluator.dates[i + 1] - ts) for i, ts in
-        #                      enumerate(self.evaluator.dates[:-1]))
-        # self.tsdeltas[self.evaluator.dates_as_string[-1]] = self.tsdeltas[
-        #     self.evaluator.dates_as_string[-2]]  # TODO: fix this
-
-        # prepare data - we could move some of this to elsewhere
-
-        template_id = template.id
-
         # extract info about nodes & links
         self.network = network
         self.nodes = {}
         self.links = {}
-        self.ttypes = {'node': {}, 'link': {}, 'network': {}}
+        self.ttypes = {}
         self.res_attrs = {}
         self.link_nodes = {}
 
@@ -156,58 +119,67 @@ class WaterSystem(object):
         self.nparams = 0
         self.nvars = 0
 
-        ttypeattrs = {'node': {}, 'link': {}, 'network': {}}
+        ttypeattrs = {}
         rtypeattrs = {'node': {}, 'link': {}, 'network': {}}
 
         for tt in template.types:
             ttype_name = convert_type_name(tt.name)
             resource_type = tt.resource_type.lower()  # i.e., node, link, network
+            if resource_type not in self.ttypes:
+                self.ttypes[resource_type] = {}
             self.ttypes[resource_type][ttype_name] = []
 
-            ttypeattrs[resource_type][ttype_name] = [ta.attr_id for ta in
-                                                     tt.typeattrs]  # use typeattrs to track variables/parameters
+            # use typeattrs to track variables/parameters
+            ttypeattrs[(resource_type, tt.name)] = tt.typeattrs
 
         # organize basic network information
         # features['networks'] = [network]
-        for resource_type in ['node', 'link']:
-            for resource in network['{}s'.format(resource_type)]:
-                rtypes = list(filter(lambda x: x.template_id == template.id, resource.types))
-                if not rtypes:
-                    continue
 
-                if resource_type == 'node':
-                    idx = resource.id
-                    self.nodes[idx] = resource
-                elif resource_type == 'link':
-                    idx = (resource.node_1_id, resource.node_2_id)
-                    self.links[idx] = resource
-                    self.link_nodes[resource.id] = idx
+        def get_resource_attributes(resource):
+            rtypes = [resource_type for resource_type in resource.types if resource_type.template_id == template.id]
+            if not rtypes:
+                return
+            else:
+                rtype = rtypes[0]
 
-                # a dictionary of template_type to node_id
-                rtype = rtypes[-1]
-                type_name = convert_type_name(rtype.name)
-                if type_name not in self.ttypes[resource_type]:
-                    self.ttypes[resource_type][type_name] = []
-                self.ttypes[resource_type][type_name].append(idx)
+            if resource.get('nodes'):
+                resource_type = 'network'
+                idx = resource.id
+            elif resource.get('node_1_id'):
+                resource_type = 'link'
+                idx = (resource.node_1_id, resource.node_2_id)
+                self.links[idx] = resource
+                self.link_nodes[resource.id] = idx
+            else:
+                resource_type = 'node'
+                idx = resource.id
+                self.nodes[idx] = resource
 
-                rtypeattrs[resource_type][resource.id] = ttypeattrs[resource_type][type_name]
+            # a dictionary of template_type to node_id
+            type_name = convert_type_name(rtype.name)
+            self.ttypes[resource_type][type_name].append(idx)
 
-                # general resource attribute information
-                for ra in resource.attributes:
-                    attr_id = ra.attr_id
-                    # if attr_id in list(attrs.keys()) + rtypeattrs[resource_type][resource.id]:
-                    if attr_id in rtypeattrs[resource_type][resource.id]:
-                        self.res_attrs[ra.id] = {
-                            'name': attrs[attr_id]['name'],
-                            'type': resource_type,
-                            'data_type': 'timeseries',
-                            'is_var': ra.attr_is_var
-                        }
+            tattrs = {ta.attr_id: ta for ta in ttypeattrs[(resource_type, rtype.name)]}
 
-                        if ra.attr_is_var == 'N' and not args.suppress_input:
-                            self.nparams += 1
-                        else:
-                            self.nvars += 1
+            res_idx = (resource_type, resource.id)
+            rtypeattrs[res_idx] = list(tattrs.keys())
+
+            # general resource attribute information
+            for ra in resource.attributes:
+                if ra.attr_id in rtypeattrs[res_idx]:
+                    tattr = tattrs[ra.attr_id]
+                    self.res_attrs[ra.id] = tattr
+
+                    if ra.attr_is_var == 'N' and not args.suppress_input:
+                        self.nparams += 1
+                    else:
+                        self.nvars += 1
+
+        get_resource_attributes(network)
+        for node in network.nodes:
+            get_resource_attributes(node)
+        for link in network.links:
+            get_resource_attributes(link)
 
         # initialize dictionary of parameters
         self.scalars = {feature_type: {} for feature_type in ['node', 'link', 'net']}
@@ -215,20 +187,7 @@ class WaterSystem(object):
         self.ra_node = {ra.id: node.id for node in network.nodes for ra in node.attributes}  # res_attr to node lookup
         self.ra_link = {ra.id: link.id for link in network.links for ra in link.attributes}  # res_attr to link lookup
 
-        # ra_net = dict() # res_attr to network lookup
-        # for link in network.links:
-        # for res_attr in link.attributes:
-        # ra_link[res_attr.id] = link.id
-
-        # may be useful in the future
-        # self.class_lookup = {
-        # 'node': 'nodes',
-        # 'link': 'links',
-        # 'network': 'network'
-        # }
-
     def initialize_time_steps(self):
-
         # initialize time steps and foresight periods
 
         settings = {
@@ -244,7 +203,7 @@ class WaterSystem(object):
         # timestep deltas
         self.tsdeltas = {}
 
-        # user the dates in evaluator because we've already incurred the expense of parsing the date.
+        # use the dates in evaluator because we've already incurred the expense of parsing the date.
         self.tsdeltas = dict((self.dates_as_string[i], self.evaluator.dates[i + 1] - ts) for i, ts in
                              enumerate(self.evaluator.dates[:-1]))
         self.tsdeltas[self.evaluator.dates_as_string[-1]] = self.tsdeltas[
@@ -271,9 +230,9 @@ class WaterSystem(object):
 
         self.timeseries = {}
         self.variables = {}
-        self.block_params = ['Demand', 'Priority']
-        self.blocks = {'node': {}, 'link': {}}
-        self.results = {}
+        self.block_params = ['Storage Demand', 'Demand', 'Priority']
+        self.blocks = {'node': {}, 'link': {}, 'network': {}}
+        self.store = {}
         self.res_scens = {}
 
         self.evaluator.block_params = self.block_params
@@ -310,6 +269,7 @@ class WaterSystem(object):
 
                 self.evaluator.rs_values[(resource_type, resource_id, rs.attr_id)] = rs.value
 
+        # evaluate source data
         for source_id in self.scenario.source_ids:
 
             self.evaluator.scenario_id = source_id
@@ -317,10 +277,16 @@ class WaterSystem(object):
             source = self.scenario.source_scenarios[source_id]
 
             for rs in source.resourcescenarios:
-                if rs.resource_attr_id not in self.res_attrs:
+                res_attr = self.res_attrs.get(rs.resource_attr_id)
+                if not res_attr:
                     continue  # this is for a different resource type
-                if self.res_attrs[rs.resource_attr_id]['is_var'] == 'Y':
-                    continue  # this is a dependent (output) variable
+
+                intermediary = res_attr['properties'].get('intermediary')
+                is_var = res_attr['is_var'] == 'Y'
+
+                # non-intermediary outputs should not be pre-processed at all
+                if is_var and not intermediary:
+                    continue
 
                 # create a dictionary to lookup resourcescenario by resource attribute ID
                 self.res_scens[rs.resource_attr_id] = rs
@@ -339,13 +305,15 @@ class WaterSystem(object):
                     idx = self.link_nodes[resource_id]
                 else:
                     resource_type = 'network'
+                    resource_id = self.network.id
                     idx = -1
 
                 # identify as function or not
                 is_function = metadata.get('use_function', 'N') == 'Y'
 
                 # get attr name
-                attr_name = self.res_attrs[rs.resource_attr_id]['name']
+                attr_name = res_attr['attr_name']
+                attr_id = res_attr['attr_id']
 
                 # get data type
                 data_type = rs.value.type
@@ -360,18 +328,22 @@ class WaterSystem(object):
 
                 param_name = get_param_name(resource_type, attr_name)
 
-                # value = rs.value.value
+                parentkey = '{}/{}/{}'.format(resource_type, resource_id, attr_id)
+
                 # TODO: get fill_value from dataset/ttype (this should be user-specified)
                 self.evaluator.data_type = data_type
+                value = None
                 try:
-                    value = self.evaluator.eval_data(
-                        value=rs.value,
-                        do_eval=False,
-                        flavor='dict',
-                        fill_value=0,
-                        has_blocks=has_blocks,
-                        date_format=self.date_format
-                    )
+                    # Intermediary output functions are not evaluated at this stage, as they may depend on calculated values
+                    if not (intermediary and is_var and is_function):
+                        value = self.evaluator.eval_data(
+                            value=rs.value,
+                            do_eval=False,
+                            fill_value=0,
+                            has_blocks=has_blocks,
+                            date_format=self.date_format,
+                            parentkey=parentkey
+                        )
                 except Exception as e:
                     raise
 
@@ -407,13 +379,6 @@ class WaterSystem(object):
                             function = metadata['function']
                             if not function:  # if there is no function, this will be treated as no dataset
                                 continue
-                        #     if has_blocks:
-                        #         blocks = list(range(len(values)))
-                        #
-                        # else:
-                        #
-                        #     if has_blocks:
-                        #         blocks = list(range(len(values)))
 
                         # routine to add blocks using quadratic values - this needs to be paired with a similar routine when updating boundary conditions
                         # if has_blocks and len(blocks) == 1:
@@ -434,11 +399,32 @@ class WaterSystem(object):
                     except:
                         raise
 
+                self.store[parentkey] = value
+
                 # update resource blocks to match max of this type block and previous type blocks
                 type_blocks = self.blocks[resource_type]
                 if idx in type_blocks:
                     blocks = blocks if len(blocks) > len(type_blocks[idx]) else type_blocks[idx]
                 self.blocks[resource_type][idx] = blocks
+
+    def initialize(self, supersubscenario):
+        """A wrapper for all initialization steps."""
+
+        # add a store
+        self.store = {}
+        self.evaluator.store = self.store
+
+        # prepare parameters
+        self.prepare_params()
+
+        # set up subscenario
+        self.setup_subscenario(supersubscenario)
+
+        # initialize boundary conditions
+        self.update_boundary_conditions(0, self.foresight_periods, scope='model', initialize=True)
+
+        # prepare pyomo parameters
+        self.init_pyomo_params()
 
     def prepare_params(self):
         """
@@ -450,8 +436,8 @@ class WaterSystem(object):
 
             resource_type = ttype['resource_type']
 
-            if resource_type == 'NETWORK':
-                continue
+            # if resource_type == 'NETWORK':
+            #     continue
 
             for type_attr in ttype.typeattrs:
 
@@ -460,18 +446,13 @@ class WaterSystem(object):
                 # create a unique parameter name
                 param_name = get_param_name(resource_type, type_attr['attr_name'])
 
-                if param_name in self.params:
-                    continue
-
-                self.params[param_name] = {
-                    'attr_name': type_attr['attr_name'],
-                    'attr_id': type_attr['attr_id'],
-                    'type_attr': type_attr,
-                    'is_var': type_attr['is_var'],
-                    'resource_type': resource_type.lower(),
-                    'unit': type_attr['unit'],
-                    'dimension': type_attr['dimension']
-                }
+                if param_name not in self.params:
+                    param = type_attr
+                    param.update(
+                        resource_type=resource_type.lower(),
+                        intermediary=type_attr['properties'].get('intermediary', False)
+                    )
+                    self.params[param_name] = param
 
     def setup_subscenario(self, supersubscenario):
         """
@@ -499,9 +480,10 @@ class WaterSystem(object):
             }
 
         for variation_set in variation_sets:
-            for (resource_type, resource_id, attr_id), variation in variation_set['variations'].items():
-                attr = self.conn.attrs[resource_type][attr_id]
-                param_name = get_param_name(resource_type, attr['name'])
+            for key, variation in variation_set['variations'].items():
+                (resource_type, resource_id, attr_id) = key
+                tattr = self.conn.tattrs[key]
+                param_name = get_param_name(resource_type, tattr['attr_name'])
                 if resource_type == 'node':
                     idx = resource_id
                 elif resource_type == 'link':
@@ -521,7 +503,7 @@ class WaterSystem(object):
                                                                              variation)
 
                 else:  # we need to add the variable to account for the variation
-                    data_type = attr['dtype']
+                    data_type = tattr['data_type']
                     if data_type == 'scalar':
                         if param_name not in self.variables:
                             self.variables[param_name] = {}
@@ -532,7 +514,7 @@ class WaterSystem(object):
                             self.variables[param_name] = {}
                         self.timeseries[param_name][idx] = {
                             'values': perturb(self.evaluator.default_timeseries.copy(), variation),
-                            'dimension': attr['dim']
+                            'dimension': tattr['dimension']
                         }
 
     def init_pyomo_params(self):
@@ -540,11 +522,14 @@ class WaterSystem(object):
 
         for param_name, param in self.params.items():
 
-            type_attr = param['type_attr']
-            data_type = type_attr['data_type']
+            data_type = param['data_type']
             resource_type = param['resource_type']
             attr_name = param['attr_name']
-            unit = self.params[param_name]['unit']
+            unit = param['unit']
+            intermediary = param['intermediary']
+
+            if intermediary or resource_type == 'network':
+                continue
 
             param_definition = None
 
@@ -556,17 +541,17 @@ class WaterSystem(object):
                 default = 0  # TODO: define in template rather than here
 
                 if data_type == 'scalar':
-                    param_definition = 'm.{rt}s'
+                    param_definition = 'm.{resource_type}s'
 
                     if unit == 'ac-ft':
-                        initial_values = {key: value * self.ACRE_FEET_TO_VOLUME for (key, value) in
-                                          initial_values.items()}
+                        initial_values \
+                            = {key: value * self.TAF_TO_VOLUME for (key, value) in initial_values.items()}
 
                 elif data_type == 'timeseries':
                     if attr_name in self.block_params:
-                        param_definition = 'm.{rt}Blocks, m.TS'
+                        param_definition = 'm.{resource_type}Blocks, m.TS'
                     else:
-                        param_definition = 'm.{rt}s, m.TS'
+                        param_definition = 'm.{resource_type}s, m.TS'
 
                 elif data_type == 'array':
                     continue  # placeholder
@@ -580,7 +565,7 @@ class WaterSystem(object):
                     param_definition += ', initialize=initial_values'
                     # TODO: This is an opportunity for allocating memory in a Cythonized version?
 
-                param_definition = param_definition.format(rt=resource_type.title())
+                param_definition = param_definition.format(resource_type=resource_type.title())
 
             expression = 'm.{param_name} = Param({param_definition})'.format(
                 param_name=param_name,
@@ -601,105 +586,124 @@ class WaterSystem(object):
         for j in self.instance.Storage:
             getattr(self.instance, 'nodeInitialStorage')[j] = getattr(self.instance, 'nodeStorage')[j, 0].value
 
-    def update_boundary_conditions(self, tsi, tsf, initialize=False):
-        """Update boundary conditions. If initialize is True, this will create a variables object for use in creating the model (i.e., via init_pyomo_params). Otherwise, it will update the model instance."""
+    def update_param(self, idx, param_name, dates_as_string, values=None, is_function=False, func=None,
+                     has_blocks=False, scope='model',
+                     initialize=False):
 
-        dates_as_string = self.dates_as_string[tsi:tsf]
+        try:
+            param = self.params[param_name]
+            intermediary = param['intermediary']
 
-        for param_name, param in self.timeseries.items():
-            for idx, p in param.items():
+            if scope == 'model' and intermediary or scope == 'intermediary' and not intermediary:
+                return
 
+            dimension = param['dimension']
+            data_type = param['data_type']
+            unit = param['unit']
+            attr_id = param['attr_id']
+            resource_type = param['resource_type']
+            startup_date = self.variables.get('{}StartupDate'.format(resource_type), {}).get(idx, '')
+
+            if resource_type == 'network':
+                resource_id = self.network.id
+            elif resource_type == 'node':
+                resource_id = idx
+            else:
+                resource_id = idx
+
+            if is_function:
+                self.evaluator.data_type = data_type
                 try:
-
-                    is_function = p.get('is_function')
-                    has_blocks = p.get('has_blocks', False)
-                    dimension = self.params[param_name]['dimension']
-                    unit = self.params[param_name]['unit']
-
-                    rt = self.params[param_name]['resource_type']
-                    startup_date = self.variables.get('{}StartupDate'.format(rt), {}).get(idx, '')
-
-                    if is_function:
-                        self.evaluator.data_type = p['data_type']
-                        self.evaluator.tsi = tsi
-                        self.evaluator.tsf = tsf
-                        try:
-                            fn = p.get('function', '')
-                            rc, errormsg, values = self.evaluator.eval_function(fn, flavor='dict', counter=0,
-                                                                                has_blocks=has_blocks)
-                            if errormsg:
-                                raise Exception(errormsg)
-                        except:
-                            raise
-
-                        # update missing blocks, if any
-                        # routine to add blocks using quadratic values - this needs to be paired with a similar routine when updating boundary conditions
-                        if has_blocks:
-                            values = addsubblocks(values, param_name, self.default_subblocks)
-
-                    else:
-                        # subblocks have already been added when reading in the time series
-                        values = p['values']
-
-                    if not values:
-                        continue
-
-                    if has_blocks:
-                        cols = values.keys()
-                    else:
-                        cols = [0]
-                    for j, c in enumerate(cols):
-
-                        if has_blocks:
-                            vals = values[c]
-                        else:
-                            vals = values.get(c, values)
-
-                        # update values variable
-                        for i, datetime in enumerate(dates_as_string):
-
-                            if datetime not in vals:
-                                continue
-
-                            # set value of anything with a start date to zero
-                            # note that this works to compare ISO-formatted strings, so no pendulum date needed
-                            # TODO: make this more sophisticated
-                            if datetime < startup_date:
-                                val = 0
-
-                            else:
-                                val = vals[datetime]
-
-                            # if is_function:
-                            # TODO: use generic unit converter here (and move to evaluator?)
-                            if dimension == 'Volumetric flow rate':
-                                # if unit == 'ft^3 s^-1':
-                                val *= self.tsdeltas[datetime].days * self.VOLUMETRIC_FLOW_RATE_CONST
-                            elif dimension == 'Volume':
-                                if unit == 'ac-ft':
-                                    val *= self.ACRE_FEET_TO_VOLUME
-
-                            # create key
-                            key = list(idx) + [i] if type(idx) == tuple else [idx, i]
-                            if has_blocks:
-                                # add block & subblock to key
-                                key.insert(-1, c[0])
-                                key.insert(-1, c[1])
-                            key = tuple(key)
-
-                            if initialize:
-                                if param_name not in self.variables:
-                                    self.variables[param_name] = {}
-                                self.variables[param_name][key] = val
-
-                            else:  # just update the parameter directly
-                                try:
-                                    # TODO: replace this with explicit updates
-                                    getattr(self.instance, param_name)[key] = val
-                                except:
-                                    pass  # likely the variable simply doesn't exist in the model
+                    full_key = (resource_type, resource_id, attr_id, dates_as_string)
+                    rc, errormsg, values = self.evaluator.eval_function(func, counter=0, has_blocks=has_blocks)
+                    if errormsg:
+                        raise Exception(errormsg)
                 except:
                     raise
+
+                # update missing blocks, if any
+                # routine to add blocks using quadratic values - this needs to be paired with a similar routine when updating boundary conditions
+                if has_blocks:
+                    values = addsubblocks(values, param_name, self.default_subblocks)
+
+            if not values:
+                return
+
+            if has_blocks:
+                cols = values.keys()
+            else:
+                cols = [0]
+            for j, c in enumerate(cols):
+
+                if has_blocks:
+                    vals = values[c]
+                else:
+                    vals = values.get(c, values)
+
+                # update values variable
+                for i, datetime in enumerate(dates_as_string):
+
+                    if datetime not in vals:
+                        continue
+
+                    # set value of anything with a start date to zero
+                    # note that this works to compare ISO-formatted strings, so no pendulum date needed
+                    # TODO: make this more sophisticated
+                    if datetime < startup_date:
+                        val = 0
+
+                    else:
+                        val = vals[datetime]
+
+                    if scope == 'intermediary' and intermediary:
+                        self.store_value(resource_type, resource_id, attr_id, datetime, val)
+
+                    elif scope == 'model' and not intermediary:
+
+                        # only convert if updating the LP model
+                        # TODO: use generic unit converter here (and move to evaluator?)
+                        if dimension == 'Volumetric flow rate':
+                            # if unit == 'ft^3 s^-1':
+                            val *= (self.tsdeltas[datetime].days * self.VOLUMETRIC_FLOW_RATE_CONST)
+                        elif dimension == 'Volume':
+                            if unit == 'ac-ft':
+                                val *= self.TAF_TO_VOLUME
+
+                        # create key
+                        pyomo_key = list(idx) + [i] if type(idx) == tuple else [idx, i]
+                        if has_blocks:
+                            # add block & subblock to key
+                            pyomo_key.insert(-1, c[0])
+                            pyomo_key.insert(-1, c[1])
+                        pyomo_key = tuple(pyomo_key)
+
+                        if initialize:
+                            if param_name not in self.variables:
+                                self.variables[param_name] = {}
+                            self.variables[param_name][pyomo_key] = val
+
+                        else:  # just update the parameter directly
+                            try:
+                                # TODO: replace this with explicit updates
+                                getattr(self.instance, param_name)[pyomo_key] = val
+                            except:
+                                pass  # likely the variable simply doesn't exist in the model
+        except:
+            raise
+
+    def update_boundary_conditions(self, tsi, tsf, scope, initialize=False):
+        """
+        Update boundary conditions. If initialize is True, this will create a variables object for use in creating the model (i.e., via init_pyomo_params). Otherwise, it will update the model instance.
+        """
+        dates_as_string = self.dates_as_string[tsi:tsf]
+        self.evaluator.tsi = tsi
+        self.evaluator.tsf = tsf
+
+        for param_name, params in self.timeseries.items():
+            for idx, p in params.items():
+                self.update_param(idx, param_name, dates_as_string, values=p.get('values'),
+                                  is_function=p.get('is_function'), func=p.get('function'),
+                                  has_blocks=p.get('has_blocks'), scope=scope, initialize=initialize)
 
     def update_internal_params(self):
         '''Update internal parameters based on calculated variables'''
@@ -724,61 +728,99 @@ class WaterSystem(object):
         for var in self.instance.component_objects(Var):
             self.store_results(var, timesteps, tsidx, is_var=True, include_all=include_all)
 
-    def store_results(self, param, timesteps, tsidx, is_var, include_all=None):
+    def parse_pyomo_index(self, is_var, idx, resource_type):
+        if is_var:
+            res_idx = idx[:2] if resource_type == 'link' else idx[0]
+            time_idx = idx[-1]
+        else:
+            res_idx = (type(idx) == int and idx) or (idx[:2] if resource_type == 'link' else idx[0])
+            time_idx = type(idx) != int and idx[-1]
+        return res_idx, time_idx
 
-        if param.name not in self.params:
+    def store_results(self, pyomo_param, timesteps, tsidx, is_var, include_all=None):
+
+        param = self.params.get(pyomo_param.name, {})
+
+        # debug gain and debug loss should cause an exception not a return
+        if not param and pyomo_param.name not in ['debugGain', 'debugLoss']:
             return
 
-        if tsidx == 0:
-            self.results[param.name] = {}
-
-        rt = self.params[param.name]['resource_type']
-
-        has_blocks = self.params.get(param.name, {}).get('attr_name') in self.block_params
-
-        dimension = self.params[param.name]['dimension']
-        unit = self.params[param.name]['unit']
+        resource_type = param.get('resource_type')
+        has_blocks = param.get('attr_name') in self.block_params
+        dimension = param.get('dimension')
+        unit = param.get('unit')
+        attr_id = param.get('attr_id')
 
         # collect to results
-        for idx, p in param.items():
+        for idx, p in pyomo_param.items():
+            if p is None:
+                continue
 
-            if is_var:
+            # debug gain / loss
+            if pyomo_param.name in ['debugLoss', 'debugGain']:
+                if p.value:
+                    res_idx = idx[0]
+                    res_name = self.nodes[res_idx]['name']
+                    raise Exception("DEBUG: {} for {} with value {}".format(pyomo_param.name, res_name, p.value))
+                else:
+                    continue
 
-                # this assumes that all decision variables are time series
-                # TODO: Verify this assumption
-                # res_idx = len(idx)==2 and idx[0] or idx[:-1]
-                res_idx = idx[:2] if rt == 'link' else idx[0]
-                time_idx = idx[-1]
-            else:
-                res_idx = (type(idx) == int and idx) or (idx[:2] if rt == 'link' else idx[0])
-                time_idx = type(idx) != int and idx[-1]
+            res_idx, time_idx = self.parse_pyomo_index(is_var, idx, resource_type)
 
             if not (time_idx is not False and time_idx == 0 or include_all):  # index[-1] is time
                 continue
-
-            if tsidx == 0 and res_idx not in self.results[param.name]:  # idx[:-1] is node/link + block, if any
-                self.results[param.name][res_idx] = {}
 
             timestamp = timesteps[time_idx]
 
             # the purpose of this addition is to aggregate blocks, if any, thus eliminating the need for Pandas
             # on the other hand, it should be checked which is faster: Pandas group_by or simple addition here
 
-            val = 0 or round(p.value, 6)
+            val = 0 if not p.value else round(p.value, 6)
 
             if dimension == 'Volume':
                 if unit == 'ac-ft':
-                    val /= self.ACRE_FEET_TO_VOLUME
+                    val /= self.TAF_TO_VOLUME
             elif dimension == 'Volumetric flow rate':
                 # elif unit == 'ft^3 s^-1':
                 val /= (self.tsdeltas[timestamp].days * self.VOLUMETRIC_FLOW_RATE_CONST)
 
-            if has_blocks:
-                self.results[param.name][res_idx][timestamp] = \
-                    val + self.results[param.name][res_idx].get(timestamp, 0)
+            # store in evaluator store
+            if resource_type == 'node':
+                res_id = res_idx
             else:
-                self.results[param.name][res_idx][timestamp] = val
+                res_id = self.links[res_idx]['id']
+            self.store_value(resource_type, res_id, attr_id, timestamp, val, has_blocks=has_blocks)
+
         return
+
+    def store_value(self, ref_key, ref_id, attr_id, timestamp, val, has_blocks=False):
+
+        # add new resource scenario if it doesn't exist
+        key = (ref_key, ref_id, attr_id)
+        try:
+            if key not in self.evaluator.rs_values:
+                tattr = self.conn.tattrs.get(key)
+                if not tattr:
+                    # This is because the model assigns all resource attribute possibilities to all resources of like type
+                    # In practice this shouldn't make a difference, but may result in a model larger than desired
+                    # TODO: correct this
+                    return
+                self.evaluator.rs_values[key] = {
+                    'type': tattr['data_type'],
+                    'unit': tattr['unit'],
+                    'dimension': tattr['dimension'],
+                    'value': None
+                }
+        except:
+            raise
+
+        # store value
+        key_string = '{ref_key}/{ref_id}/{attr_id}'.format(ref_key=ref_key, ref_id=ref_id, attr_id=attr_id)
+        if key_string not in self.store:
+            self.store[key_string] = {}
+        if has_blocks:
+            val += self.store[key_string].get(timestamp, 0)
+        self.store[key_string][timestamp] = val
 
     def save_results(self):
 
@@ -829,92 +871,82 @@ class WaterSystem(object):
         res_names = {}
 
         try:
-            count = 0
-            pcount = 1
-            nparams = len(self.results)
-            for param_name, param_values in self.results.items():
-                # if self.args.debug and pcount == 5:
-                # break
-                pcount += 1
+            n = 0
+            N = len(self.store)
+            for key, value in self.store.items():
+                n += 1
+                res_type, res_id, attr_id = key.split('/')
+                res_id = int(res_id)
+                attr_id = int(attr_id)
+
+                tattr = self.conn.tattrs.get((res_type, res_id, attr_id))
+                if not tattr:
+                    # Same as previous issue.
+                    # This is because the model assigns all resource attribute possibilities to all resources of like type
+                    # In practice this shouldn't make a difference, but may result in a model larger than desired
+                    # TODO: correct this
+                    continue
+                param_name = get_param_name(res_type, tattr['attr_name'])
+
                 if param_name not in self.params:
                     continue  # it's probably an internal variable/parameter
-                rt = self.params[param_name]['resource_type']
-                ta = self.params[param_name]['type_attr']
-                attr_id = ta['attr_id']
-                attr = self.conn.attrs[rt][attr_id]
 
-                # reorganize values as stored by Pyomo to resource attributes
-                # pid = Pyomo resource attribute id
-                dataset_values = {}
-                for idx, values in param_values.items():
-                    idx = type(idx) == tuple and list(idx) or [idx]  # needed to concatenate with the attribute name
-                    if rt == 'node':
-                        n = 1
-                        pid = (idx[0], ta['attr_name'])
-                        res_name = self.nodes[pid[0]]['name']
-                    elif rt == 'link':
-                        n = 2
-                        pid = (idx[0], idx[1], ta['attr_name'])
-                        res_name = self.links[pid[:n]]['name']
-                    else:
-                        # TODO: Include Network resource data here
-                        continue
+                # define the dataset value
+                try:
+                    value = json.dumps({'0': OrderedDict(sorted(value.items()))})
+                except:
+                    continue
 
-                    if pid not in self.conn.res_attr_lookup[rt]:
-                        continue
+                # create the resource scenario (dataset attached to a specific resource attribute)
+                res_idx = (res_type, res_id, attr_id)
+                res_attr_id = self.conn.res_attr_lookup.get(res_idx)
+                if not res_attr_id:
+                    continue
+                resource_name = self.conn.raid_to_res_name[res_attr_id]
+                if res_type == 'network':
+                    res_scen_name = '{} - {} [{}]'.format(self.network.name, tattr['attr_name'], self.scenario.name)
+                else:
+                    res_scen_name = '{} - {} - {} [{}]'.format(self.network.name,
+                                                               resource_name,
+                                                               tattr['attr_name'],
+                                                               self.scenario.name)
 
-                    # block = 0 if len(idx)==n else idx[n]
-                    # if pid not in dataset_values:
-                    # dataset_values[pid] = {}
-                    # dataset_values[pid][str(block)] = values
-                    dataset_values[pid] = values
+                if tattr['dimension'] == 'Temperature':
+                    continue  # TODO: fix this!!!
 
-                    if pid not in res_names: res_names[pid] = res_name
-
-                # create datasets from values
-                for pid, dataset_value in dataset_values.items():
-
-                    count += 1
-
-                    # define the dataset value
-                    # first, aggregate blocks
-                    # df = pd.DataFrame(data=dataset_value).sum(axis=1)
-                    # df = pd.DataFrame(dataset_value)
-                    value = json.dumps({'0': OrderedDict(sorted(dataset_value.items()))})
-
-                    # create the resource scenario (dataset attached to a specific resource attribute)
-                    rs = {
-                        'resource_attr_id': self.conn.res_attr_lookup[rt][pid],
-                        'value': {
-                            'type': attr['dtype'],
-                            'name': '{} - {} - {} [{}]'.format(self.network.name, res_names[pid], attr['name'],
-                                                               self.scenario.name),
-                            'unit': attr['unit'],
-                            'dimension': attr['dim'],
-                            'value': value
-                        }
+                rs = {
+                    'resource_attr_id': res_attr_id,
+                    'value': {
+                        'type': tattr['data_type'],
+                        'name': res_scen_name,
+                        'unit': tattr['unit'],
+                        'dimension': tattr['dimension'],
+                        'value': value
                     }
-                    res_scens.append(rs)
-                    mb += len(value.encode()) * 1.1 / 1e6  # large factor of safety
+                }
+                res_scens.append(rs)
+                mb += len(value.encode()) * 1.1 / 1e6  # large factor of safety
 
-                    if mb > 10 or count % 100 == 0:
-                        result_scenario['resourcescenarios'] = res_scens[:-1]
-                        resp = self.conn.dump_results(result_scenario)
-                        # if count % 20 == 0 or pcount == nparams:
-                        if self.scenario.reporter:
-                            self.scenario.reporter.report(
-                                action='save',
-                                saved=round(count / (self.nparams + self.nvars) * 100))
+                if mb > 10 or n % 100 == 0:
+                    result_scenario['resourcescenarios'] = res_scens[:-1]
+                    resp = self.conn.dump_results(result_scenario)
+                    if 'id' not in resp:
+                        raise Exception('Error saving data')
+                    if self.scenario.reporter:
+                        self.scenario.reporter.report(
+                            action='save',
+                            saved=round(n / N * 100)
+                        )
 
-                        # purge just-uploaded scenarios
-                        res_scens = res_scens[-1:]
-                        mb = 0
+                    # purge just-uploaded scenarios
+                    res_scens = res_scens[-1:]
+                    mb = 0
 
             # upload the last remaining resource scenarios
             result_scenario['resourcescenarios'] = res_scens
             resp = self.conn.dump_results(result_scenario)
             if self.scenario.reporter:
-                self.scenario.reporter.report(action='save', saved=round(count / (self.nparams + self.nvars) * 100))
+                self.scenario.reporter.report(action='save', saved=round(n / N * 100))
 
         except:
             msg = 'ERROR: Results could not be saved.'
@@ -957,10 +989,11 @@ class WaterSystem(object):
                 pcount += 1
                 if param_name not in self.params:
                     continue  # it's probably an internal variable/parameter
-                rt = self.params[param_name]['resource_type']
+                resource_type = self.params[param_name]['resource_type']
                 ta = self.params[param_name]['type_attr']
                 attr_id = ta['attr_id']
-                attr = self.conn.attrs[rt][attr_id]
+
+                tattr = self.conn.tattrs[resource_type][attr_id]
 
                 # reorganize values as stored by Pyomo to resource attributes
                 # pid = Pyomo resource attribute id
@@ -970,11 +1003,11 @@ class WaterSystem(object):
                 # dataset_values = {}
                 for idx, values in param_values.items():
                     idx = type(idx) == tuple and list(idx) or [idx]  # needed to concatenate with the attribute name
-                    if rt == 'node':
+                    if resource_type == 'node':
                         n = 1
                         pid = (idx[0], ta['attr_name'])
                         res_name = self.nodes[pid[0]]['name']
-                    elif rt == 'link':
+                    elif resource_type == 'link':
                         n = 2
                         pid = (idx[0], idx[1], ta['attr_name'])
                         res_name = self.links[pid[:n]]['name']
@@ -982,12 +1015,12 @@ class WaterSystem(object):
                         # TODO: Include Network resource data here
                         continue
 
-                    if pid not in self.conn.res_attr_lookup[rt]:
+                    if pid not in self.conn.res_attr_lookup[resource_type]:
                         continue
 
                     # has_blocks = ta.properties.get('has_blocks') \
-                    # or rt == 'node' and len(idx) == 2 \
-                    # or rt == 'link' and len(idx) == 3
+                    # or resource_type == 'node' and len(idx) == 2 \
+                    # or resource_type == 'link' and len(idx) == 3
 
                     # if has_blocks:
                     # block = 0 if len(idx) == n else idx[n]
