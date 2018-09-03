@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 statuses = {
     'start': 'started',
     'done': 'finished',
@@ -15,7 +17,7 @@ class Scenario(object):
         self.id = None
         self.base_scenarios = []
         self.source_id = args.source_id
-        self.source_scenarios = {}
+        self.source_scenarios = OrderedDict()
         self.network_id = network.id
         self.reporter = None
         self.total_steps = 1
@@ -68,10 +70,7 @@ class Scenario(object):
 
             this_chain.reverse()
 
-            if i == 0:
-                self.source_ids.extend(this_chain)  # include baseline
-            else:
-                self.source_ids.extend(this_chain[1:]) # exclude baseline
+            self.source_ids.extend(this_chain)
 
         self.base_ids = []
         for s in self.base_scenarios:
