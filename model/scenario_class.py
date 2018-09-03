@@ -103,9 +103,10 @@ class Scenario(object):
             'network_id': self.network_id,
             'scenario_id': self.id,
             'scids': self.scenario_ids,
-            # 'scenario_name': self.name,
             'status': 'unknown'
         })
+        if self.id:
+            payload.update(name=self.scenario['name'])
         if action:
             payload.update({
                 'action': action,
