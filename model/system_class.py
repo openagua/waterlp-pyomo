@@ -865,6 +865,8 @@ class WaterSystem(object):
                 'scen': result_scenario,
             })
 
+        self.scenario.id = result_scenario['id']
+
         # save variable data to database
         res_scens = []
         mb = 0

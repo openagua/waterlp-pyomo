@@ -12,6 +12,7 @@ statuses = {
 
 class Scenario(object):
     def __init__(self, scenario_ids, conn, network, args):
+        self.id = None
         self.base_scenarios = []
         self.source_id = args.source_id
         self.source_scenarios = {}
@@ -101,6 +102,7 @@ class Scenario(object):
             'sid': self.unique_id,
             'source_id': self.source_id,
             'network_id': self.network_id,
+            'scenario_id': self.id,
             'scids': self.scenario_ids,
             # 'scenario_name': self.name,
             'status': 'unknown'
