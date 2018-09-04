@@ -17,6 +17,8 @@ Docker is a system for packaging and deploying software in a way that ensures cr
 1. Install [Docker](https://www.docker.com/get-started)
 1. Install the [openagua/waterlp-general-pyomo](https://hub.docker.com/r/openagua/waterlp-general-pyomo/), **OR** install directly using the [Dockerfile](https://github.com/openagua/waterlp-general/blob/master/Dockerfile)
 
+NOTE: Docker is not currently set up for writing output to a local folder. So if the intent is to use this totally offline, the Dockerfile needs to be modified to map an output folder from the local computer to the Docker container. The model script would also need to be modified to allow this.
+
 ## Direct installation
 Direct installation is for those who want to run a Python script directly, including for development. The general process, which is more or less the same as in the [Dockerfile](https://github.com/openagua/waterlp-general/blob/master/Dockerfile) is as follows. Some hints are offered for different systems, but generally the specific installation details are left to the user. For example, a lot of this (all?) might be done through [Anaconda](https://anaconda.org/). Google is your friend here!
 
