@@ -15,10 +15,10 @@ Some additional key points:
 Docker is a system for packaging and deploying software in a way that ensures cross-platform consistency. Docker installation is included first, as it is a simple process to install.
 
 1. Install [Docker](https://www.docker.com/get-started)
-1. Install the [openagua/waterlp-general-pyomo](https://hub.docker.com/r/openagua/waterlp-general-pyomo/), **OR** install directly using the [Dockerfile](waterlp-general/Dockerfile)
+1. Install the [openagua/waterlp-general-pyomo](https://hub.docker.com/r/openagua/waterlp-general-pyomo/), **OR** install directly using the [Dockerfile](https://github.com/openagua/waterlp-general/blob/master/Dockerfile)
 
 ## Direct installation
-Direct installation is for those who want to run a Python script directly, including for development. The general process, which is more or less the same as in the [Dockerfile](waterlp-general/Dockerfile) is:
+Direct installation is for those who want to run a Python script directly, including for development. The general process, which is more or less the same as in the [Dockerfile](https://github.com/openagua/waterlp-general/blob/master/Dockerfile) is:
 
 1. Install [Python 3.6](https://www.python.org/downloads/release/python-366/)
 1. Install software needed to compile binary Python packages (e.g., `python3-dev` on Linux).
