@@ -13,20 +13,20 @@ Some additional key points:
 ## Direct installation
 Direct installation is for those who want to run a Python script directly, including for development. The general process is:
 
-0. Install Python 3.6, ideally within a new environment:
+1. Install Python 3.6, ideally within a new environment:
 * Install [Python 3.6](https://www.python.org/downloads/release/python-366/)
 * Install software needed to compile some of the Python packages.
 * Create a virtual environment with Python 3.6. Follow [these instructions](https://medium.com/@peterchang_82818/python-beginner-must-know-virtualenv-tutorial-example-5e3f82cfbd8b). **NOTE**: Virtual environments are an annoying part of Python, especially if you are coming from, say, R or Matlab. They aren't strictly required, but are generally recommended to ensure correct versions of libraries are installed for each project. Most of the top Python IDEs (e.g., PyCharm, Wing IDE, Spyder, etc.) have tools built in to help create and manage virtual environments. PyCharm is particularly good.
-0. Clone this repository into a folder of your choice.
-0. Install (from within your virtual environment, if used) required packages with pip: `pip install -r requirements.txt`.
+1. Clone this repository into a folder of your choice.
+1. Install (from within your virtual environment, if used) required packages with pip: `pip install -r requirements.txt`.
 
 
 ## Docker installation
 
 Docker is a system for packaging and deploying software in a way that ensures cross-platform consistency.
 
-0. Install [Docker](https://www.docker.com/get-started)
-0. Install the Docker image, available as [openagua/waterlp-general-pyomo](https://hub.docker.com/r/openagua/waterlp-general-pyomo/)
+1. Install [Docker](https://www.docker.com/get-started)
+1. Install the Docker image, available as [openagua/waterlp-general-pyomo](https://hub.docker.com/r/openagua/waterlp-general-pyomo/)
 
 # Instructions for use
 (documentation forthcoming)
