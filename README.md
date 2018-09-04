@@ -25,7 +25,7 @@ Direct installation is for those who want to run a Python script directly, inclu
 Docker is a system for packaging and deploying software in a way that ensures cross-platform consistency.
 
 1. Install [Docker](https://www.docker.com/get-started)
-1. Install the Docker image, available as [openagua/waterlp-general-pyomo](https://hub.docker.com/r/openagua/waterlp-general-pyomo/)
+1. Install the [openagua/waterlp-general-pyomo](https://hub.docker.com/r/openagua/waterlp-general-pyomo/), **OR** install directly using the [Dockerfile](waterlp-general/Dockerfile)
 
 # Instructions for use
 (documentation forthcoming)
