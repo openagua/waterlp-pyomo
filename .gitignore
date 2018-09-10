@@ -1,3 +1,5 @@
+instance/
+results/
 model/logs/
 *.wpr
 *.wpu
