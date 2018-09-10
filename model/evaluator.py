@@ -184,7 +184,7 @@ def make_dates(settings, date_format=True, data_type='timeseries'):
         period = pendulum.period(pendulum.parse(start), pendulum.parse(end))
 
         if timestep in ['day', 'week', 'month']:
-            dates = list(period.range("{}s".format(timestep)))
+            dates = period.range("{}s".format(timestep))
         elif timestep == 'thricemonthly':
             dates = []
             start = pendulum.parse(start)
@@ -365,21 +365,21 @@ class Evaluator:
                 if self.data_type != 'timeseries':
                     break
 
-            values = self.hashstore[hashkey][tsi:tsf]
+            values = self.hashstore[hashkey][tsi:]
             if self.data_type == 'timeseries' or self.data_type == 'periodic timeseries':
                 dates_idx = self.dates_as_string[tsi:tsf]
                 if type(values[0]) in (list, tuple):
                     cols = range(len(values[0]))
                     if flavor is None:
+                        result = pd.DataFrame.from_records(data=values, index=dates_idx,
+                                                           columns=cols).to_json(date_format='iso')
+                    elif flavor == 'pandas':
+                        result = pd.DataFrame.from_records(data=values, index=dates_idx, columns=cols)
+                    else:
                         if has_blocks:
                             result = {c: {d: v[c] for d, v in zip(dates_idx, values)} for c in cols}
                         else:
                             result = {d: v[0] for d, v in zip(dates_idx, values)}
-                    elif flavor == 'pandas':
-                        result = pd.DataFrame.from_records(data=values, index=dates_idx, columns=cols)
-                    elif flavor == 'json':
-                        result = pd.DataFrame.from_records(data=values, index=dates_idx, columns=cols).to_json(
-                            date_format='iso')
                 else:
                     if flavor == 'json':
                         result = pd.DataFrame(data=values, index=dates_idx).to_json(date_format='iso')

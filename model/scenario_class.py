@@ -1,5 +1,3 @@
-from collections import OrderedDict
-
 statuses = {
     'start': 'started',
     'done': 'finished',
@@ -14,10 +12,9 @@ statuses = {
 
 class Scenario(object):
     def __init__(self, scenario_ids, conn, network, args):
-        self.id = None
         self.base_scenarios = []
         self.source_id = args.source_id
-        self.source_scenarios = OrderedDict()
+        self.source_scenarios = {}
         self.network_id = network.id
         self.reporter = None
         self.total_steps = 1
@@ -70,7 +67,10 @@ class Scenario(object):
 
             this_chain.reverse()
 
-            self.source_ids.extend(this_chain)
+            if i == 0:
+                self.source_ids.extend(this_chain)  # include baseline
+            else:
+                self.source_ids.extend(this_chain[1:]) # exclude baseline
 
         self.base_ids = []
         for s in self.base_scenarios:
@@ -101,18 +101,16 @@ class Scenario(object):
             'sid': self.unique_id,
             'source_id': self.source_id,
             'network_id': self.network_id,
-            'scenario_id': self.id,
             'scids': self.scenario_ids,
+            # 'scenario_name': self.name,
             'status': 'unknown'
         })
-        if self.id:
-            payload.update(name=self.scenario['name'])
         if action:
             payload.update({
                 'action': action,
                 'status': statuses.get(action, 'unknown'),
                 'date': self.current_date,
-                'progress': self.finished / self.total_steps * 100,
+                'progress': int(round(self.finished / self.total_steps * 100)),
             })
             if action == 'start':
                 payload.update({
