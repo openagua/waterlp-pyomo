@@ -26,6 +26,7 @@ def create_model(name, nodes, links, types, ts_idx, params, blocks, debug_gain=F
     m.NodesOut = Set(m.Nodes, initialize=NodesOut_init)
 
     # sets (nodes or links) for each template type
+    # TODO: make this more explicit; this method reduces transparency
     {setattr(m, k, Set(within=m.Nodes, initialize=v)) for k, v in types['node'].items()}
     {setattr(m, k, Set(within=m.Links, initialize=v)) for k, v in types['link'].items()}
 
@@ -152,7 +153,7 @@ def create_model(name, nodes, links, types, ts_idx, params, blocks, debug_gain=F
             # excess evap should not cause infeasibility, so (expensive) virtualPrecepGain is subtracted from net evap
             loss = m.nodeNetEvaporation[j, t] - m.virtualPrecipGain[j, t]
             # loss = 0
-        elif j in m.FlowRequirement:  # | m.WaterTreatment:
+        elif j in m.FlowRequirement | m.Hydropower:
             loss = 0
         elif j in m.DemandNodes:
             loss = m.nodeLocalLoss[j, t] + m.nodeDelivery[j, t] * m.nodeConsumptiveLoss[j, t] / 100
@@ -297,10 +298,16 @@ def create_model(name, nodes, links, types, ts_idx, params, blocks, debug_gain=F
 
     # channel capacity
     def ChannelInflowCap_rule(m, i, j, t):
-        return m.linkInflow[i, j, t] <= m.linkFlowCapacity[i, j, t]
+        if (i, j, t) in m.linkFlowCapacity and m.linkFlowCapacity[i, j, t].value >= 0:
+            return m.linkInflow[i, j, t] <= m.linkFlowCapacity[i, j, t]
+        else:
+            return Constraint.Skip
 
     def ChannelOutflowCap_rule(m, i, j, t):
-        return m.linkOutflow[i, j, t] <= m.linkFlowCapacity[i, j, t]
+        if (i, j, t) in m.linkFlowCapacity and m.linkFlowCapacity[i, j, t].value >= 0:
+            return m.linkOutflow[i, j, t] <= m.linkFlowCapacity[i, j, t]
+        else:
+            return Constraint.Skip
 
     m.ChannelInflowCapacity = Constraint(m.ConstrainedLink, m.TS, rule=ChannelInflowCap_rule)
     m.ChannelOutflowCapacity = Constraint(m.ConstrainedLink, m.TS, rule=ChannelOutflowCap_rule)
@@ -322,10 +329,10 @@ def create_model(name, nodes, links, types, ts_idx, params, blocks, debug_gain=F
         # Link demand / value not yet implemented
 
         fn = summation(m.nodeValueDB, m.nodeDeliveryDB) \
-             - 1000 * summation(m.virtualPrecipGain) \
-             - 10 * summation(m.floodStorage) \
-             - 5 * summation(m.nodeSpill) \
-             - 1 * summation(m.emptyStorage)
+                   - 1000 * summation(m.virtualPrecipGain) \
+                   - 10 * summation(m.floodStorage) \
+                   - 5 * summation(m.nodeSpill) \
+                   - 1 * summation(m.emptyStorage)
         fn_debug_gain = - 1000 * summation(m.debugGain) if debug_gain else 0
         fn_debug_loss = - 1000 * summation(m.debugLoss) if debug_loss else 0
 
