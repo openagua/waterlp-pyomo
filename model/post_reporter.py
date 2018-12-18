@@ -35,7 +35,7 @@ class Reporter:
         if action == 'error':
             if self.is_main_reporter:
                 self._cancel_heartbeat()
-            payload['extra_info'] = payload.get('message')
+            payload['extra_info'] = payload.pop('message', 'unknown error')
         return self.send(**payload)
 
     def start(self, is_main_reporter=True, **payload):

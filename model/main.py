@@ -93,6 +93,7 @@ def run_scenarios(args, log):
         if post_reporter:
             post_reporter.start(is_main_reporter=(args.message_protocol == 'post'),
                                 **start_payload)  # kick off reporter with heartbeat
+
         else:
             print("Model started")
 
@@ -137,11 +138,13 @@ def run_scenarios(args, log):
             if err_class == 'InnerSyntaxError':
                 m = err.message
             else:
-                m = "Unknown error."
-            message = "Failed to prepare system. Error: {}".format(m)
+                # m = "Unknown error."
+                m = str(err)
+            message = "Error: Failed to prepare system.\n\n{}".format(m)
 
             if post_reporter:
-                post_reporter.report(action="error", message=message)
+                payload = scenario.update_payload(action='error', message=message)
+                post_reporter.report(**payload)
             else:
                 print(message)
 

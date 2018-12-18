@@ -355,8 +355,20 @@ class WaterSystem(object):
                             date_format=self.date_format,
                             parentkey=parentkey
                         )
-                except Exception as e:
-                    raise
+                except Exception as err:
+                    resource_name = ''
+                    if resource_type == 'node':
+                        resource_name = self.nodes.get(resource_id, {}).get('name')
+                    elif resource_type == 'link':
+                        n1, n2 = self.link_nodes.get(resource_id)
+                        resource_name = self.links.get((n1, n2), {}).get('name')
+                    else:
+                        resource_name = 'network'
+                    msg = '{}\n\n{}'.format(
+                        err,
+                        'This error occurred when calculating {} for {}.'.format(rs['value']['name'], resource_name)
+                    )
+                    raise Exception(msg)
 
                 if type(value) == str and not value:
                     continue
