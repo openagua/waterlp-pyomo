@@ -33,8 +33,7 @@ def create_model(name, nodes, links, types, ts_idx, params, blocks, debug_gain=F
     # sets for non-storage nodes
     m.Storage = m.Reservoir | m.Groundwater  # union
     m.NonStorage = m.Nodes - m.Storage  # difference
-    # m.DemandNodes = m.GeneralDemand | m.UrbanDemand | m.AgriculturalDemand | m.FlowRequirement | m.WaterTreatment  # we should eliminate differences
-    m.DemandNodes = m.GeneralDemand | m.UrbanDemand | m.AgriculturalDemand | m.FlowRequirement  # we should eliminate differences
+    m.DemandNodes = m.GeneralDemand | m.UrbanDemand | m.Hydropower | m.FlowRequirement  # we should eliminate differences
     m.NonJunction = m.Nodes - m.Junction
 
     # sets for links with channel capacity
@@ -99,8 +98,7 @@ def create_model(name, nodes, links, types, ts_idx, params, blocks, debug_gain=F
 
     m.nodeRelease = Var(m.Reservoir * m.TS, domain=NonNegativeReals)  # controlled release to a river
     m.nodeSpill = Var(m.Reservoir * m.TS, domain=NonNegativeReals)  # uncontrolled/undesired release to a river
-    # m.nodeExcess = Var((m.FlowRequirement | m.WaterTreatment) * m.TS, domain=NonNegativeReals)
-    m.nodeExcess = Var((m.FlowRequirement) * m.TS, domain=NonNegativeReals)
+    m.nodeExcess = Var((m.FlowRequirement | m.Hydropower) * m.TS, domain=NonNegativeReals)
     m.emptyStorage = Var(m.Reservoir * m.TS, domain=NonNegativeReals)  # empty storage space
     m.floodStorage = Var(m.Reservoir * m.TS, domain=NonNegativeReals)
 
@@ -111,7 +109,7 @@ def create_model(name, nodes, links, types, ts_idx, params, blocks, debug_gain=F
     # PARAMETERS
 
     # TODO: replace this with explicit declarations
-    for param in params.values():
+    for param_name, param in params.items():
         if param['is_var'] == 'N':
             initial_values = param.get('initial_values')  # initial values is used in expression execution
             expression = param.get('expression')
@@ -202,7 +200,7 @@ def create_model(name, nodes, links, types, ts_idx, params, blocks, debug_gain=F
         '''Deliveries may not exceed physical conditions.'''
         if j in m.Storage:
             return m.nodeStorageDelivery[j, t] <= m.nodeStorage[j, t]
-        elif j in m.FlowRequirement:  #| m.WaterTreatment:
+        elif j in m.FlowRequirement | m.Hydropower:
             return m.nodeDelivery[j, t] + m.nodeExcess[j, t] <= sum(m.linkOutflow[i, j, t] for i in m.NodesIn[j])
         elif j in m.DemandNodes:
             # deliveries to demand nodes (urban, ag, general) must equal actual inflows
