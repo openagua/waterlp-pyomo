@@ -9,10 +9,10 @@ RUN apt-get install -y python3 python3-pip
 RUN pip3 install --upgrade pip
 
 COPY requirements.txt /home/requirements.txt
-ADD /model /home/model
+ADD /waterlp /home/waterlp
 
 WORKDIR /home
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-WORKDIR /model
+WORKDIR /waterlp
 #RUN python3 ./setup.py build_ext --inplace
