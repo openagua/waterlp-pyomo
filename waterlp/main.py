@@ -7,18 +7,15 @@ import uuid
 from datetime import datetime
 from functools import partial
 from itertools import product
-
-from connection import connection
-from system_class import WaterSystem
-from scenario_class import Scenario
-from post_reporter import Reporter as PostReporter
-
-from logger import create_logger
-from utils import create_subscenarios
-
 from copy import copy
 
-from scenario_main import run_scenario
+from waterlp.connection import connection
+from waterlp.system_class import WaterSystem
+from waterlp.scenario_class import Scenario
+from waterlp.post_reporter import Reporter as PostReporter
+from waterlp.logger import create_logger
+from waterlp.utils import create_subscenarios
+from waterlp.scenario_main import run_scenario
 
 
 def run_scenarios(args, log):

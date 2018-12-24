@@ -7,7 +7,7 @@ from pyomo.environ import Var, Param
 from datetime import datetime as dt
 from math import isnan
 
-from evaluator import Evaluator
+from waterlp.evaluator import Evaluator
 
 
 def convert_type_name(n):

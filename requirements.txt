@@ -26,11 +26,11 @@ numpy==1.15.0
 pandas==0.23.4
 pendulum==2.0.4
 ply==3.10
-Pyomo==5.3
+Pyomo==5.6
 python-dateutil==2.6.1
 pytz==2017.3
 pytzdata==2018.5
-PyUtilib==5.6
+PyUtilib==5.6.4
 requests==2.18.4
 s3fs==0.2.0
 s3transfer==0.1.12
@@ -38,6 +38,7 @@ six==1.11.0
 txaio==2.8.2
 tzlocal==1.5.1
 urllib3==1.22
+websockets==7.0
 Werkzeug==0.14.1
 XlsxWriter==1.0.2
 zope.interface==4.4.3
