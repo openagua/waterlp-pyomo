@@ -368,7 +368,7 @@ class Evaluator:
         self.hashstore = {}
 
     def eval_data(self, value, func=None, do_eval=False, flavor=None, depth=0, flatten=False, fill_value=None,
-                  date_format='iso', has_blocks=False, parentkey=None):
+                  date_format='iso', has_blocks=False, data_type=None, parentkey=None):
 
         try:
             # create the data depending on data type
@@ -382,7 +382,7 @@ class Evaluator:
             if func is None:
                 func = metadata.get('function')
             usefn = metadata.get('use_function', 'N') == 'Y'
-            data_type = value['type']
+            data_type = data_type or value['type']
 
             if parentkey not in self.store:
                 if data_type in ['timeseries', 'periodic timeseries']:
@@ -645,6 +645,7 @@ class Evaluator:
                     depth=depth,
                     parentkey=key,
                     has_blocks=has_blocks,
+                    data_type=tattr.data_type, # NOTE: the type attribute data type overrides the actual value type
                     date_format='%Y-%m-%d %H:%M:%S'
                 )
 

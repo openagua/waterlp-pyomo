@@ -189,6 +189,28 @@ class WaterSystem(object):
         self.ra_node = {ra.id: node.id for node in network.nodes for ra in node.attributes}  # res_attr to node lookup
         self.ra_link = {ra.id: link.id for link in network.links for ra in link.attributes}  # res_attr to link lookup
 
+    def create_exception(self, key, message):
+
+        resource_type, resource_id, attr_id = key.split('/')
+        resource_id = int(resource_id)
+        attr_id = int(attr_id)
+        attr_name = self.conn.tattrs.get((resource_type, resource_id, attr_id), {}).get('attr_name', 'unknown attribute')
+        if resource_type == 'node':
+            resource_name = self.nodes.get(resource_id, {}).get('name', 'unknown resource')
+        elif resource_type == 'link':
+            resource_name = self.links.get(self.link_nodes.get(resource_id), {}).get('name', 'unknown resource')
+        else:
+            resource_name = self.network['name']
+
+        msg = 'Error calculating {attr} at {rtype} {res}\n\n{exc}'.format(
+            attr=attr_name,
+            rtype=resource_type,
+            res=resource_name,
+            exc=message
+        )
+
+        return Exception(msg)
+
     def initialize_time_steps(self):
         # initialize time steps and foresight periods
 
@@ -652,9 +674,11 @@ class WaterSystem(object):
                         parentkey=parentkey
                     )
                     if errormsg:
-                        raise Exception(errormsg)
-                except:
-                    raise
+                        exception = self.create_exception(parentkey, errormsg)
+                        raise exception
+                except Exception as err:
+                    exception = self.create_exception(parentkey, str(err))
+                    raise exception
 
                 # update missing blocks, if any
                 # routine to add blocks using quadratic values - this needs to be paired with a similar routine when updating boundary conditions
