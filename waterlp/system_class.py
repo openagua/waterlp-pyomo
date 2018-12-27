@@ -202,7 +202,7 @@ class WaterSystem(object):
         else:
             resource_name = self.network['name']
 
-        msg = 'Error calculating {attr} at {rtype} {res}\n\n{exc}'.format(
+        msg = 'Error calculating {attr} at {rtype} {res}:\n\n{exc}'.format(
             attr=attr_name,
             rtype=resource_type,
             res=resource_name,
@@ -674,11 +674,9 @@ class WaterSystem(object):
                         parentkey=parentkey
                     )
                     if errormsg:
-                        exception = self.create_exception(parentkey, errormsg)
-                        raise exception
+                        raise Exception(errormsg)
                 except Exception as err:
-                    exception = self.create_exception(parentkey, str(err))
-                    raise exception
+                    raise self.create_exception(parentkey, str(err))
 
                 # update missing blocks, if any
                 # routine to add blocks using quadratic values - this needs to be paired with a similar routine when updating boundary conditions
@@ -719,14 +717,16 @@ class WaterSystem(object):
 
                     elif scope == 'model' and not intermediary:
 
-                        # only convert if updating the LP model
-                        # TODO: use generic unit converter here (and move to evaluator?)
-                        if dimension == 'Volumetric flow rate':
-                            # if unit == 'ft^3 s^-1':
-                            val *= (self.tsdeltas[datetime].days * self.VOLUMETRIC_FLOW_RATE_CONST)
-                        elif dimension == 'Volume':
-                            if unit == 'ac-ft':
-                                val *= self.TAF_TO_VOLUME
+                        if val is not None:
+
+                            # only convert if updating the LP model
+                            # TODO: use generic unit converter here (and move to evaluator?)
+                            if dimension == 'Volumetric flow rate':
+                                # if unit == 'ft^3 s^-1':
+                                val *= (self.tsdeltas[datetime].days * self.VOLUMETRIC_FLOW_RATE_CONST)
+                            elif dimension == 'Volume':
+                                if unit == 'ac-ft':
+                                    val *= self.TAF_TO_VOLUME
 
                         # create key
                         pyomo_key = list(idx) + [i] if type(idx) == tuple else [idx, i]

@@ -41,21 +41,21 @@ def run_scenario(supersubscenario, args=None, verbose=False):
         #     pass
         _run_scenario(system, args, supersubscenario, reporter=reporter, verbose=verbose)
 
-    except Exception as e:
+    except Exception as err:
 
         # print(e, file=sys.stderr)
-        # Exception logging inspired by: https://seasonofcode.com/posts/python-multiprocessing-and-exceptions.html
-        exc_buffer = StringIO()
-        traceback.print_exc(file=exc_buffer)
-        msg = 'At step ' + str(current_step) + ' of ' + str(total_steps) + ': ' + \
-              str(e) + '\nUncaught exception in worker process:\n' + exc_buffer.getvalue()
-        if current_step:
-            msg += '\n\nPartial results have been saved'
+        # # Exception logging inspired by: https://seasonofcode.com/posts/python-multiprocessing-and-exceptions.html
+        # exc_buffer = StringIO()
+        # traceback.print_exc(file=exc_buffer)
+        # msg = 'At step ' + str(current_step) + ' of ' + str(total_steps) + ': ' + \
+        #       str(e) + '\nUncaught exception in worker process:\n' + exc_buffer.getvalue()
+        # if current_step:
+        #     msg += '\n\nPartial results have been saved'
 
-        print(msg)
+        print(err)
 
         if reporter:
-            reporter.report(action='error', message=msg)
+            reporter.report(action='error', message=str(err))
 
 
 def _run_scenario(system=None, args=None, supersubscenario=None, reporter=None, verbose=False):
@@ -165,11 +165,14 @@ def _run_scenario(system=None, args=None, supersubscenario=None, reporter=None, 
                 system.update_boundary_conditions(ts, ts + system.foresight_periods, 'intermediary')
                 system.update_boundary_conditions(ts_next, ts_next + system.foresight_periods, 'model')
                 system.update_internal_params()  # update internal parameters that depend on user-defined variables
-            except:
+            except Exception as err:
                 # we can still save results to-date
-                system.save_results()
-                msg = 'ERROR: Something went wrong at step {} of {} ({}). There is something wrong with the model. Results to-date have been saved'.format(
-                    current_step, total_steps, current_dates[0]
+                # system.save_results()
+                msg = 'ERROR: Something went wrong at step {timestep} of {total} ({date}):\n\n{err}'.format(
+                    timestep=current_step,
+                    total=total_steps,
+                    date=current_dates[0].date(),
+                    err=err
                 )
                 print(msg)
                 if system.scenario.reporter:
