@@ -103,7 +103,7 @@ def create_model(name, nodes, links, types, ts_idx, params, blocks, debug_gain=F
     m.floodStorage = Var(m.Reservoir * m.TS, domain=NonNegativeReals)
 
     # variables to prevent infeasibilities
-    m.virtualPrecipGain = Var(m.Reservoir * m.TS, domain=NonNegativeReals)  # allow reservoir to make up for excess evap
+    # m.virtualPrecipGain = Var(m.Reservoir * m.TS, domain=NonNegativeReals)  # allow reservoir to make up for excess evap
     m.groundwaterLoss = Var(m.Groundwater * m.TS, domain=NonNegativeReals)  # added to allow groundwater to overflow
 
     # PARAMETERS
@@ -149,8 +149,8 @@ def create_model(name, nodes, links, types, ts_idx, params, blocks, debug_gain=F
     def LocalLoss_rule(m, j, t):
         if j in m.Reservoir:
             # excess evap should not cause infeasibility, so (expensive) virtualPrecepGain is subtracted from net evap
-            loss = m.nodeNetEvaporation[j, t] - m.virtualPrecipGain[j, t]
-            # loss = 0
+            # loss = m.nodeNetEvaporation[j, t] - m.virtualPrecipGain[j, t]
+            loss = 0
         elif j in m.FlowRequirement | m.Hydropower:
             loss = 0
         elif j in m.DemandNodes:
@@ -327,10 +327,10 @@ def create_model(name, nodes, links, types, ts_idx, params, blocks, debug_gain=F
         # Link demand / value not yet implemented
 
         fn = summation(m.nodeValueDB, m.nodeDeliveryDB) \
-                   - 1000 * summation(m.virtualPrecipGain) \
                    - 10 * summation(m.floodStorage) \
                    - 5 * summation(m.nodeSpill) \
-                   - 1 * summation(m.emptyStorage)
+                   # - 1 * summation(m.emptyStorage)
+                   # - 1000 * summation(m.virtualPrecipGain) \
         fn_debug_gain = - 1000 * summation(m.debugGain) if debug_gain else 0
         fn_debug_loss = - 1000 * summation(m.debugLoss) if debug_loss else 0
 
