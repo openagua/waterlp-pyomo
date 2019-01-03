@@ -4,31 +4,35 @@ import pika
 import os
 from main import run_model
 
-connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
-channel = connection.channel()
-
-queue_name = 'openagua-model_secret'
-
-channel.queue_declare(queue=queue_name)
-
 
 def callback(ch, method, properties, body):
-
     try:
         message = json.loads(body)
         env = message.get('env', {})
         args = message.get('args')
-        ably_token = message.get('ably_token')
+        ably_auth_url = message.get('ably_auth_url')
 
         for key, value in env.items():
             os.environ[key] = value
         print(" [x] Running model with %r" % args)
-        run_model(args_list=args, ably_token=ably_token)
+        run_model(args_list=args, ably_auth_url=ably_auth_url)
     except:
-        pass # fail silently for now
+        pass  # fail silently for now
 
 
-channel.basic_consume(callback, queue=queue_name, no_ack=True)
+def start_listening(queue_name):
+    connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
+    channel = connection.channel()
+    channel.queue_declare(queue=queue_name)
+    channel.basic_consume(callback, queue=queue_name, no_ack=True)
+    print(' [*] Waiting for messages. To exit press CTRL+C')
+    channel.start_consuming()
 
-print(' [*] Waiting for messages. To exit press CTRL+C')
-channel.start_consuming()
+
+if __name__ == '__main__':
+    try:
+        model_secret = os.environ['MODEL_SECRET']
+        queue_name = 'model-{}'.format(model_secret)
+        start_listening(queue_name)
+    except:
+        raise

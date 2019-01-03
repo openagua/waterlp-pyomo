@@ -1,5 +1,7 @@
 from os import environ
 from ably import AblyRest
+import ably
+import logging
 
 # def get_ably_token(token_request=None):
 #
@@ -9,14 +11,19 @@ from ably import AblyRest
 
 class AblyReporter(object):
     
-    def __init__(self, args, post_reporter, token=None):
+    def __init__(self, args, post_reporter, auth_url=None):
         self.args = args
         self.post_reporter = post_reporter
         channel_name = u'com.openagua.update_s{}n{}'.format(args.source_id, args.network_id)
-        if token:
-            rest = AblyRest(token=token)
+        if auth_url:
+            logging.getLogger('ably').setLevel(logging.DEBUG)
+            logger = logging.getLogger('ably')
+            logger.addHandler(logging.StreamHandler())
+            client_id = args.hydra_username
+            model_secret = environ.get('MODEL_SECRET')
+            rest = AblyRest(auth_url=auth_url, auth_params={'client_id': client_id, 'model_secret': model_secret})
         else:
-            rest = AblyRest(environ.get('ABLY_API_KEY'))
+            rest = AblyRest(key=environ.get('ABLY_API_KEY'))
         self.channel = rest.channels.get(channel_name)
         self.updater = None
         

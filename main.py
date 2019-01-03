@@ -15,13 +15,12 @@ from waterlp.connection import connection
 from waterlp.system_class import WaterSystem
 from waterlp.scenario_class import Scenario
 from waterlp.post_reporter import Reporter as PostReporter
-# from waterlp.ably_reporter import get_ably_token
 from waterlp.logger import create_logger
 from waterlp.utils import create_subscenarios
 from waterlp.scenario_main import run_scenario
 
 
-def run_scenarios(args, log, ably_token=None):
+def run_scenarios(args, log, ably_auth_url=None):
     """
         This is a wrapper for running all the scenarios, where scenario runs are
         processor-independent. As much of the Pyomo model is created here as
@@ -78,8 +77,6 @@ def run_scenarios(args, log, ably_token=None):
 
     # prepare the reporter
     post_reporter = PostReporter(args) if args.post_url else None
-
-    # ably_token = get_ably_token(ably_token_request)
 
     for scenario_ids in args.scenario_ids:
 
@@ -157,10 +154,10 @@ def run_scenarios(args, log, ably_token=None):
     # =======================
 
     if args.debug:
-        run_scenario(all_supersubscenarios[0], args=args, ably_token=ably_token)
+        run_scenario(all_supersubscenarios[0], args=args, ably_auth_url=ably_auth_url)
         return
     else:
-        p = partial(run_scenario, args=args, verbose=verbose, ably_token=ably_token)
+        p = partial(run_scenario, args=args, verbose=verbose, ably_auth_url=ably_auth_url)
 
         # set multiprocessing parameters
         poolsize = mp.cpu_count()
@@ -247,7 +244,7 @@ def commandline_parser():
 args = {}
 
 
-def run_model(args_list, ably_token=None):
+def run_model(args_list, ably_auth_url=None):
     global args
     parser = commandline_parser()
     args, unknown = parser.parse_known_args(args_list)
@@ -278,7 +275,7 @@ def run_model(args_list, ably_token=None):
     args_str = '\n\t'.join([''] + ['{}: {}'.format(a[0], a[1]) for a in argtuples])
     log.info('started model run with args: %s' % args_str)
 
-    run_scenarios(args, log, ably_token=ably_token)
+    run_scenarios(args, log, ably_auth_url=ably_auth_url)
 
 
 if __name__ == '__main__':
