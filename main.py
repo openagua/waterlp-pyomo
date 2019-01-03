@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import argparse
 from ast import literal_eval
 import multiprocessing as mp
@@ -13,12 +15,13 @@ from waterlp.connection import connection
 from waterlp.system_class import WaterSystem
 from waterlp.scenario_class import Scenario
 from waterlp.post_reporter import Reporter as PostReporter
+# from waterlp.ably_reporter import get_ably_token
 from waterlp.logger import create_logger
 from waterlp.utils import create_subscenarios
 from waterlp.scenario_main import run_scenario
 
 
-def run_scenarios(args, log):
+def run_scenarios(args, log, ably_token=None):
     """
         This is a wrapper for running all the scenarios, where scenario runs are
         processor-independent. As much of the Pyomo model is created here as
@@ -75,6 +78,8 @@ def run_scenarios(args, log):
 
     # prepare the reporter
     post_reporter = PostReporter(args) if args.post_url else None
+
+    # ably_token = get_ably_token(ably_token_request)
 
     for scenario_ids in args.scenario_ids:
 
@@ -152,10 +157,10 @@ def run_scenarios(args, log):
     # =======================
 
     if args.debug:
-        run_scenario(all_supersubscenarios[0], args=args)
+        run_scenario(all_supersubscenarios[0], args=args, ably_token=ably_token)
         return
     else:
-        p = partial(run_scenario, args=args, verbose=verbose)
+        p = partial(run_scenario, args=args, verbose=verbose, ably_token=ably_token)
 
         # set multiprocessing parameters
         poolsize = mp.cpu_count()
@@ -235,8 +240,6 @@ def commandline_parser():
     parser.add_argument('--si', dest='suppress_input', action='store_true',
                         help='''Suppress input from results. This can speed up writing results.''')
     parser.add_argument('--st', dest='start_time', default=datetime.now().isoformat(), help='''Run start time.''')
-    parser.add_argument('--rkey', dest='report_api_key', default='',
-                        help='''Generic option for passing an API key for reporting to client.''')
 
     return parser
 
@@ -244,10 +247,10 @@ def commandline_parser():
 args = {}
 
 
-def main():
+def run_model(args_list, ably_token=None):
     global args
     parser = commandline_parser()
-    args, unknown = parser.parse_known_args(sys.argv[1:])
+    args, unknown = parser.parse_known_args(args_list)
     here = os.path.abspath(os.path.dirname(__file__))
 
     # log file location - based on user
@@ -275,11 +278,11 @@ def main():
     args_str = '\n\t'.join([''] + ['{}: {}'.format(a[0], a[1]) for a in argtuples])
     log.info('started model run with args: %s' % args_str)
 
-    run_scenarios(args, log)
+    run_scenarios(args, log, ably_token=ably_token)
 
 
 if __name__ == '__main__':
     try:
-        main()
+        run_model(sys.argv[1:])
     except Exception as e:
         print(e, file=sys.stderr)

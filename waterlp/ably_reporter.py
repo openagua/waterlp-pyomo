@@ -1,12 +1,22 @@
+from os import environ
 from ably import AblyRest
+
+# def get_ably_token(token_request=None):
+#
+#     token = Auth.request_token(token_request)
+#     return None
+
 
 class AblyReporter(object):
     
-    def __init__(self, args, post_reporter):
+    def __init__(self, args, post_reporter, token=None):
         self.args = args
         self.post_reporter = post_reporter
         channel_name = u'com.openagua.update_s{}n{}'.format(args.source_id, args.network_id)
-        rest = AblyRest(args.report_api_key)
+        if token:
+            rest = AblyRest(token=token)
+        else:
+            rest = AblyRest(environ.get('ABLY_API_KEY'))
         self.channel = rest.channels.get(channel_name)
         self.updater = None
         
