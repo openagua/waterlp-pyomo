@@ -1,5 +1,5 @@
 from os import environ
-from ably import AblyRest, Auth
+from ably import AblyRest
 import logging
 
 
