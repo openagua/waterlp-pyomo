@@ -10,12 +10,12 @@ def callback(ch, method, properties, body):
         message = json.loads(body)
         env = message.get('env', {})
         args = message.get('args')
-        ably_auth_url = message.get('ably_auth_url')
+        kwargs = message.get('kwargs')
 
         for key, value in env.items():
             os.environ[key] = value
         print(" [x] Running model with %r" % args)
-        run_model(args_list=args, ably_auth_url=ably_auth_url)
+        run_model(args_list=args, **kwargs)
     except:
         pass  # fail silently for now
 

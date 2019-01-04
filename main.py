@@ -20,7 +20,7 @@ from waterlp.utils import create_subscenarios
 from waterlp.scenario_main import run_scenario
 
 
-def run_scenarios(args, log, ably_auth_url=None):
+def run_scenarios(args, log, **kwargs):
     """
         This is a wrapper for running all the scenarios, where scenario runs are
         processor-independent. As much of the Pyomo model is created here as
@@ -154,10 +154,10 @@ def run_scenarios(args, log, ably_auth_url=None):
     # =======================
 
     if args.debug:
-        run_scenario(all_supersubscenarios[0], args=args, ably_auth_url=ably_auth_url)
+        run_scenario(all_supersubscenarios[0], args=args, **kwargs)
         return
     else:
-        p = partial(run_scenario, args=args, verbose=verbose, ably_auth_url=ably_auth_url)
+        p = partial(run_scenario, args=args, verbose=verbose, **kwargs)
 
         # set multiprocessing parameters
         poolsize = mp.cpu_count()
@@ -244,7 +244,7 @@ def commandline_parser():
 args = {}
 
 
-def run_model(args_list, ably_auth_url=None):
+def run_model(args_list, **kwargs):
     global args
     parser = commandline_parser()
     args, unknown = parser.parse_known_args(args_list)
@@ -275,7 +275,7 @@ def run_model(args_list, ably_auth_url=None):
     args_str = '\n\t'.join([''] + ['{}: {}'.format(a[0], a[1]) for a in argtuples])
     log.info('started model run with args: %s' % args_str)
 
-    run_scenarios(args, log, ably_auth_url=ably_auth_url)
+    run_scenarios(args, log, **kwargs)
 
 
 if __name__ == '__main__':

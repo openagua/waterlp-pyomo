@@ -12,7 +12,7 @@ current_step = 0
 total_steps = 0
 
 
-def run_scenario(supersubscenario, args=None, ably_auth_url=None, verbose=False):
+def run_scenario(supersubscenario, args=None, verbose=False, **kwargs):
     global current_step, total_steps
 
     system = supersubscenario.get('system')
@@ -26,7 +26,7 @@ def run_scenario(supersubscenario, args=None, ably_auth_url=None, verbose=False)
         post_reporter.is_main_reporter = True
         reporter = post_reporter
     elif args.message_protocol == 'ably':  # i.e. www.ably.io
-        reporter = AblyReporter(args, post_reporter, auth_url=ably_auth_url)
+        reporter = AblyReporter(args, post_reporter, **kwargs)
 
     if reporter:
         reporter.updater = system.scenario.update_payload
