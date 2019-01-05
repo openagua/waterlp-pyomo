@@ -26,7 +26,7 @@ def run_scenario(supersubscenario, args=None, verbose=False, **kwargs):
         post_reporter.is_main_reporter = True
         reporter = post_reporter
     elif args.message_protocol == 'ably':  # i.e. www.ably.io
-        reporter = AblyReporter(args, post_reporter, **kwargs)
+        reporter = AblyReporter(args, post_reporter, ably_auth_url=kwargs.pop('ably_auth_url', None))
 
     if reporter:
         reporter.updater = system.scenario.update_payload

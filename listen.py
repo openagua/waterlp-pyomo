@@ -20,8 +20,19 @@ def callback(ch, method, properties, body):
         pass  # fail silently for now
 
 
-def start_listening(queue_name):
-    connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
+def start_listening(model_key):
+    queue_name = 'model-{}'.format(model_key)
+    host = os.environ.get('RABBITMQ_HOST', 'localhost')
+    if host == 'localhost':
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host=host))
+    else:
+        connection = pika.BlockingConnection(pika.ConnectionParameters(
+            host=host,
+            credentials=pika.PlainCredentials(
+                username=os.environ.get('RABBITMQ_USERNAME', model_key),
+                password=os.environ.get('RABBITMQ_PASSWORD', 'password')
+            )
+        ))
     channel = connection.channel()
     channel.queue_declare(queue=queue_name)
     channel.basic_consume(callback, queue=queue_name, no_ack=True)
@@ -31,8 +42,7 @@ def start_listening(queue_name):
 
 if __name__ == '__main__':
     try:
-        model_secret = os.environ['MODEL_SECRET']
-        queue_name = 'model-{}'.format(model_secret)
-        start_listening(queue_name)
+        model_key = os.environ['MODEL_KEY']
+        start_listening(model_key)
     except:
         raise

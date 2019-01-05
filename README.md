@@ -10,6 +10,16 @@ Some additional key points:
 
 # Installation
 
+## Variables
+
+Whether installation is via Docker or direct, several environment variables are needed. These include:
+
+* AWS_S3_BUCKET - The AWS S3 bucket for data files
+* AWS_ACCESS_KEY_ID - The AWS access key for reading/writing data files
+* AWS_SECRET_ACCESS_KEY - The AWS secret access key for reading/writing data files
+* MODEL_KEY - The key, generated in OpenAgua, associated with the model. This is for accessing the model queue and reporting progress.
+* RABBITMQ_HOST - The RabbitMQ host from which to wait for model run tasks.
+
 ## Docker installation
 
 Docker is a system for packaging and deploying software in a way that ensures cross-platform consistency. Docker installation is included first, as it is a simple process to install.

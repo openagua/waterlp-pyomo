@@ -5,12 +5,12 @@ import logging
 
 class AblyReporter(object):
 
-    def __init__(self, args, post_reporter, ably_auth_url=None, ably_token_request=None, **kwargs):
+    def __init__(self, args, post_reporter, ably_auth_url=None):
         self.args = args
         self.post_reporter = post_reporter
         channel_name = u'com.openagua.update_s{}n{}'.format(args.source_id, args.network_id)
         if ably_auth_url:
-            logging.getLogger('ably').setLevel(logging.DEBUG)
+            logging.getLogger('ably').setLevel(logging.CRITICAL)
             logger = logging.getLogger('ably')
             logger.addHandler(logging.StreamHandler())
             client_id = args.hydra_username
