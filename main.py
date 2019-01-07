@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import argparse
 from ast import literal_eval
 import multiprocessing as mp
@@ -18,7 +20,7 @@ from waterlp.utils import create_subscenarios
 from waterlp.scenario_main import run_scenario
 
 
-def run_scenarios(args, log):
+def run_scenarios(args, log, **kwargs):
     """
         This is a wrapper for running all the scenarios, where scenario runs are
         processor-independent. As much of the Pyomo model is created here as
@@ -152,10 +154,10 @@ def run_scenarios(args, log):
     # =======================
 
     if args.debug:
-        run_scenario(all_supersubscenarios[0], args=args)
+        run_scenario(all_supersubscenarios[0], args=args, **kwargs)
         return
     else:
-        p = partial(run_scenario, args=args, verbose=verbose)
+        p = partial(run_scenario, args=args, verbose=verbose, **kwargs)
 
         # set multiprocessing parameters
         poolsize = mp.cpu_count()
@@ -235,8 +237,6 @@ def commandline_parser():
     parser.add_argument('--si', dest='suppress_input', action='store_true',
                         help='''Suppress input from results. This can speed up writing results.''')
     parser.add_argument('--st', dest='start_time', default=datetime.now().isoformat(), help='''Run start time.''')
-    parser.add_argument('--rkey', dest='report_api_key', default='',
-                        help='''Generic option for passing an API key for reporting to client.''')
 
     return parser
 
@@ -244,10 +244,10 @@ def commandline_parser():
 args = {}
 
 
-def main():
+def run_model(args_list, **kwargs):
     global args
     parser = commandline_parser()
-    args, unknown = parser.parse_known_args(sys.argv[1:])
+    args, unknown = parser.parse_known_args(args_list)
     here = os.path.abspath(os.path.dirname(__file__))
 
     # log file location - based on user
@@ -275,11 +275,11 @@ def main():
     args_str = '\n\t'.join([''] + ['{}: {}'.format(a[0], a[1]) for a in argtuples])
     log.info('started model run with args: %s' % args_str)
 
-    run_scenarios(args, log)
+    run_scenarios(args, log, **kwargs)
 
 
 if __name__ == '__main__':
     try:
-        main()
+        run_model(sys.argv[1:])
     except Exception as e:
         print(e, file=sys.stderr)
