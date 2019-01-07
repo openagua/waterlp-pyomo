@@ -4,7 +4,6 @@ import pika
 import os
 from main import run_model
 
-
 def callback(ch, method, properties, body):
     try:
         message = json.loads(body)
