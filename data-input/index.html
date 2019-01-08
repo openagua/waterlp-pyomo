@@ -6,7 +6,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         
         
-        <link rel="canonical" href="https://openagua.github.io/waterlp-general/data-input/">
+        
         <link rel="shortcut icon" href="../img/favicon.ico">
         <title>Data input - WaterLP</title>
         <link href="../css/bootstrap-custom.min.css" rel="stylesheet">
@@ -53,18 +53,21 @@
                                 <a href="#" class="dropdown-toggle" data-toggle="dropdown">User guide <b class="caret"></b></a>
                                 <ul class="dropdown-menu">
                                     
-<li >
-    <a href="../allocation-logic/">Allocation logic</a>
-</li>
-                                    
 <li class="active">
     <a href="./">Data input</a>
+</li>
+                                    
+<li >
+    <a href="../function-reference/">Function reference</a>
 </li>
                                     
 <li >
     <a href="../glossary/">Glossary</a>
 </li>
                                 </ul>
+                            </li>
+                            <li >
+                                <a href="../allocation-logic/">Allocation logic</a>
                             </li>
                         </ul>
 
@@ -75,12 +78,12 @@
                             </a>
                         </li>
                             <li >
-                                <a rel="next" href="../allocation-logic/">
+                                <a rel="next" href="..">
                                     <i class="fa fa-arrow-left"></i> Previous
                                 </a>
                             </li>
                             <li >
-                                <a rel="prev" href="../glossary/">
+                                <a rel="prev" href="../function-reference/">
                                     Next <i class="fa fa-arrow-right"></i>
                                 </a>
                             </li>
@@ -95,26 +98,30 @@
         <div class="container">
                 <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
     <ul class="nav bs-sidenav">
-        <li class="main active"><a href="#data-input-with-openagua">Data input with OpenAgua</a></li>
+        <li class="main active"><a href="#general-information">General information</a></li>
+        <li class="main "><a href="#resource-type-and-variables">Resource type and variables</a></li>
+        <li class="main "><a href="#functions">Functions</a></li>
             <li><a href="#general-concepts">General concepts</a></li>
     </ul>
 </div></div>
                 <div class="col-md-9" role="main">
 
-<h1 id="data-input-with-openagua">Data input with OpenAgua<a class="headerlink" href="#data-input-with-openagua" title="Permanent link">&para;</a></h1>
+<h1 id="general-information">General information<a class="headerlink" href="#general-information" title="Permanent link">&para;</a></h1>
 <p>This model is designed to integrate with <a href="https://www.openagua.org">OpenAgua</a>. General concepts related to entering data are described. Documentation about the specific syntax and functions is forthcoming.</p>
+<h1 id="resource-type-and-variables">Resource type and variables<a class="headerlink" href="#resource-type-and-variables" title="Permanent link">&para;</a></h1>
+<h1 id="functions">Functions<a class="headerlink" href="#functions" title="Permanent link">&para;</a></h1>
 <h2 id="general-concepts">General concepts<a class="headerlink" href="#general-concepts" title="Permanent link">&para;</a></h2>
 <p>This code is evaluated using the evaluate function found in evaluator.py. Essentially, a string representation of a function is created, with the entered code as the body of the function. All lines are indented appropriately as needed for Python. The function is then called by the evaluator and assigned to a variable. The function is run once per time step.</p>
 <p>The last line of the user-entered code is automatically prepended with "return ", such that the user doesn't need to. This is most useful for simple cases, such as a constant value:</p>
 <p>However, the evaluator also automatically detects the presence of a "return " in the last line, such that the user may also include a return as desired. So <code>return x</code> on the last line is the same as <code>x</code>. In many cases, including <code>return</code> is simply a matter of personal preference. But this is particularly useful if a return is nested in the last part of a conditional statement. To demonstrate, the following three versions of code input yield the exact same result when evaluated:</p>
-<pre><code class="text">if date.month in [6,7,8]:
+<pre><code class="python">if date.month in [6,7,8]:
     x = 0.5
 else:
     x = 1
 x
 </code></pre>
 
-<pre><code class="text">if date.month in [6,7,8]:
+<pre><code class="python">if date.month in [6,7,8]:
     x = 0.5
 else:
     x = 1

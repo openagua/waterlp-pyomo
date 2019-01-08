@@ -8,7 +8,7 @@
         
         
         <link rel="shortcut icon" href="../img/favicon.ico">
-        <title>Glossary - WaterLP</title>
+        <title>Function reference - WaterLP</title>
         <link href="../css/bootstrap-custom.min.css" rel="stylesheet">
         <link href="../css/font-awesome.min.css" rel="stylesheet">
         <link href="../css/base.css" rel="stylesheet">
@@ -57,12 +57,12 @@
     <a href="../data-input/">Data input</a>
 </li>
                                     
-<li >
-    <a href="../function-reference/">Function reference</a>
+<li class="active">
+    <a href="./">Function reference</a>
 </li>
                                     
-<li class="active">
-    <a href="./">Glossary</a>
+<li >
+    <a href="../glossary/">Glossary</a>
 </li>
                                 </ul>
                             </li>
@@ -78,17 +78,17 @@
                             </a>
                         </li>
                             <li >
-                                <a rel="next" href="../function-reference/">
+                                <a rel="next" href="../data-input/">
                                     <i class="fa fa-arrow-left"></i> Previous
                                 </a>
                             </li>
                             <li >
-                                <a rel="prev" href="../allocation-logic/">
+                                <a rel="prev" href="../glossary/">
                                     Next <i class="fa fa-arrow-right"></i>
                                 </a>
                             </li>
                             <li>
-                                <a href="https://github.com/openagua/waterlp-general/edit/master/docs/glossary.md"><i class="fa fa-github"></i> Edit on GitHub</a>
+                                <a href="https://github.com/openagua/waterlp-general/edit/master/docs/function-reference.md"><i class="fa fa-github"></i> Edit on GitHub</a>
                             </li>
                     </ul>
                 </div>
@@ -98,75 +98,24 @@
         <div class="container">
                 <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
     <ul class="nav bs-sidenav">
-        <li class="main active"><a href="#glossary">Glossary</a></li>
-            <li><a href="#nodes-and-links">Nodes and Links</a></li>
+        <li class="main active"><a href="#overview">Overview</a></li>
+        <li class="main "><a href="#variables">Variables</a></li>
+        <li class="main "><a href="#functions">Functions</a></li>
+            <li><a href="#get">get</a></li>
+            <li><a href="#read_csv">read_csv</a></li>
     </ul>
 </div></div>
                 <div class="col-md-9" role="main">
 
-<h1 id="glossary">Glossary<a class="headerlink" href="#glossary" title="Permanent link">&para;</a></h1>
-<h2 id="nodes-and-links">Nodes and Links<a class="headerlink" href="#nodes-and-links" title="Permanent link">&para;</a></h2>
-<h3 id="demand-site">Demand Site<a class="headerlink" href="#demand-site" title="Permanent link">&para;</a></h3>
-<p>A specific location where users require water to enter a delivery or distribution system for whitdrawal service. Demand sites include: Industrial facilities, irrigation or agriculture districs, municipal sectors, ecological flow requirements, hydropower plants etc.</p>
-<p><strong>Supply Resources</strong> Resources that provide water supply for demand sites. A supply system is formed by diverse water bodies like catchments, rivers, aquifers and reservoirs connected by conveyances, delivery links and return flows.</p>
-<p><strong>Catchments</strong> Defined area or basin where surface water from precipitation, melting snow and ice accumulation gets collected by natural landscape into another water body.</p>
-<p><strong>Reservoirs</strong> An open storage area where water is collected by a catchment or by artificial transfer of water.</p>
-<p><strong>Miscellaneous sources</strong> Any other sources that provide water to demand sites it can be unconnected rivers, artificial recharge aquifers, pools etc.</p>
-<p><strong>Rivers and Diversions</strong> Natural flowing watercourse which have a head-flow and an end-flow point. Diversions are nodes that divert water from a river into a canal for example.</p>
-<p><strong>Flow Requirement</strong> The minimum amount of water flow in a stream to meet ecological requirements.</p>
-<p><strong>Conveyance</strong> Conveyances are delivery links that transport water from a withdrawal node (surface water, miscellaneous water and groundwater) to a demand point.</p>
-<p><strong>Delivery Link</strong> Distribution or transmission links that deliver water from any supply resources to demand sites.</p>
-<p><strong>Return Flow</strong> Representation of return flows or unused water from demand sites which are delivered to any water body, irrigation crop or a waste water treatment plant for example.</p>
-<h4 id="reservoir-elements">Reservoir Elements<a class="headerlink" href="#reservoir-elements" title="Permanent link">&para;</a></h4>
-<p><strong>Priority</strong> Condition of preference on demand sites to allocate water. Priority ranges from 0, the lowest priority up to ∞ the highest. The demand site with higher priority will have delivered water first, after it fullfill its need, delivery water will be continued to the second highest priority and so on.</p>
-<p><strong>Initial Storage</strong> The amount of water initially stored at the beginning of a defined period of time.</p>
-<p><strong>Maximum Outflow</strong> Maximum amount of water that can be withdrawn, discharge or pumped from a reservoir or aquifer.</p>
-<p><strong>Storage Capacity</strong> The total amount of available water capacity in an aquifer or reservoir.</p>
-<p><strong>Conservation Pool</strong> The reservoir's active storage, this is the volume of water between the inactive pool and the flood control zone. The conservation pool can be released to supply water demands.</p>
-<p><strong>Inactive Pool</strong> The inactive pool of a reservoir refers to the zone which is normally not drained and it allows sedimentation processes and an ecological area for fish and wildlife.</p>
-<p><strong>Volume Elevation Curve</strong> Relationship between elevation and volume.</p>
-<p><strong>Local Accretions</strong> Reservoir sediment accumulation.</p>
-<p><strong>Net Evaporation</strong> Evaporation rate that occurss in reservoirs after evapotranspiration from natural system and precipitation has occured.</p>
-<h4 id="urban-demand">Urban Demand<a class="headerlink" href="#urban-demand" title="Permanent link">&para;</a></h4>
-<p><strong>Priority</strong></p>
-<p><strong>Demand</strong> Quantity of water needed to meet the community's requirements</p>
-<p><strong>Consumptive Loss</strong> Water that is lost from the system at the time of delivery.</p>
-<h4 id="hydropower">Hydropower<a class="headerlink" href="#hydropower" title="Permanent link">&para;</a></h4>
-<p><strong>Priority</strong></p>
-<p><strong>Flow Capacity</strong></p>
-<p><strong>Fixed Head</strong></p>
-<p><strong>Demand</strong></p>
-<h4 id="agriculture-demand">Agriculture Demand<a class="headerlink" href="#agriculture-demand" title="Permanent link">&para;</a></h4>
-<p><strong>Priority</strong></p>
-<p><strong>Demand</strong></p>
-<p><strong>Consumptive Loss</strong></p>
-<h4 id="catchment">Catchment<a class="headerlink" href="#catchment" title="Permanent link">&para;</a></h4>
-<p><strong>Runoff</strong></p>
-<h4 id="ecological-flow-requirement">Ecological Flow Requirement<a class="headerlink" href="#ecological-flow-requirement" title="Permanent link">&para;</a></h4>
-<p><strong>Priority</strong></p>
-<h4 id="miscelaneous-source">Miscelaneous Source<a class="headerlink" href="#miscelaneous-source" title="Permanent link">&para;</a></h4>
-<p><strong>Supply</strong></p>
-<h4 id="river">River<a class="headerlink" href="#river" title="Permanent link">&para;</a></h4>
-<p><strong>Priority</strong></p>
-<p><strong>Local Accretions</strong></p>
-<p><strong>Net Evaporation</strong></p>
-<p><strong>Gain from Groundwater</strong></p>
-<p><strong>Loss to Groundwater</strong></p>
-<p><strong>Reach Length</strong></p>
-<p><strong>Minimum Flow Requirement</strong></p>
-<h4 id="delivery-link">Delivery Link<a class="headerlink" href="#delivery-link" title="Permanent link">&para;</a></h4>
-<p><strong>Loss to Groundwater</strong></p>
-<p><strong>Loss from System</strong></p>
-<p><strong>Flow Capacity</strong></p>
-<h3 id="return-flow">Return Flow<a class="headerlink" href="#return-flow" title="Permanent link">&para;</a></h3>
-<p><strong>Gain from Groundwater</strong></p>
-<p><strong>Loss to Groundwater</strong></p>
-<p><strong>Loss from System</strong></p>
-<h3 id="conveyance">Conveyance<a class="headerlink" href="#conveyance" title="Permanent link">&para;</a></h3>
-<p><strong>Loss to Groundwater</strong></p>
-<p><strong>Minimum Flow Requirement</strong></p>
-<p><strong>Loss from System</strong></p>
-<p><strong>Flow Capacity</strong></p></div>
+<h1 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h1>
+<ul>
+<li>Variables</li>
+<li>Functions</li>
+</ul>
+<h1 id="variables">Variables<a class="headerlink" href="#variables" title="Permanent link">&para;</a></h1>
+<h1 id="functions">Functions<a class="headerlink" href="#functions" title="Permanent link">&para;</a></h1>
+<h2 id="get"><code>get</code><a class="headerlink" href="#get" title="Permanent link">&para;</a></h2>
+<h2 id="read_csv"><code>read_csv</code><a class="headerlink" href="#read_csv" title="Permanent link">&para;</a></h2></div>
         </div>
 
         <footer class="col-md-12">
