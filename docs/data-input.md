@@ -1,6 +1,11 @@
-# Data input with OpenAgua
+# General information
 
 This model is designed to integrate with [OpenAgua](https://www.openagua.org). General concepts related to entering data are described. Documentation about the specific syntax and functions is forthcoming.
+
+# Resource type and variables
+
+
+# Functions
 
 ## General concepts
 
@@ -10,7 +15,7 @@ The last line of the user-entered code is automatically prepended with "return "
 
 However, the evaluator also automatically detects the presence of a "return " in the last line, such that the user may also include a return as desired. So `return x` on the last line is the same as `x`. In many cases, including `return` is simply a matter of personal preference. But this is particularly useful if a return is nested in the last part of a conditional statement. To demonstrate, the following three versions of code input yield the exact same result when evaluated:
 
-```text
+```python
 if date.month in [6,7,8]:
     x = 0.5
 else:
@@ -18,7 +23,7 @@ else:
 x
 ```
 
-```text
+```python
 if date.month in [6,7,8]:
     x = 0.5
 else:

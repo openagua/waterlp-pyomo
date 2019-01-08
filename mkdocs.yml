@@ -1,0 +1,21 @@
+site_name: WaterLP
+repo_url: https://github.com/openagua/waterlp-general/
+docs_dir: 'docs'
+theme:
+  name: mkdocs
+  include_sidebar: true
+nav:
+  - "Home": index.md
+  - "User guide":
+    - "Getting started": key-concepts.md
+    - "Data input methods": data-input.md
+    - "Function reference": function-reference.md
+    - "Glossary": glossary.md
+  - "Allocation logic": allocation-logic
+
+markdown_extensions:
+    - toc:
+        permalink: True
+
+plugins:
+    - search
