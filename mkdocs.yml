@@ -7,11 +7,11 @@ theme:
 nav:
   - "Home": index.md
   - "User guide":
-    - "Getting started": key-concepts.md
+    - "Getting started": getting-started.md
     - "Data input methods": data-input.md
     - "Function reference": function-reference.md
     - "Glossary": glossary.md
-  - "Allocation logic": allocation-logic
+  - "Allocation logic": allocation-logic.md
 
 markdown_extensions:
     - toc:
