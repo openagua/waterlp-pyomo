@@ -9,5 +9,5 @@ This documentation is currently under construction.
 
 Here is a high level flow chart of the modeling steps:
 
-![Flowchart](image/flowchart.png)
+![Flowchart](images/flowchart.png)
 *Above: a general flowchart of the modeling process*
