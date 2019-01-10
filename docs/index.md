@@ -1,6 +1,13 @@
 # Overview
 
+**This documentation is currently under construction.**
+
 This is the default generalized model available for use with [OpenAgua](https://www.openagua.org).
+
+Here is a high level flow chart of the modeling steps:
+
+![Flowchart](img/flowchart.png)
+*Above: a general flowchart of the modeling process*
 
 # Installation
 
