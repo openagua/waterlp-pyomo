@@ -7,6 +7,7 @@ This is the default generalized model available for use with [OpenAgua](https://
 Here is a high level flow chart of the modeling steps:
 
 ![Flowchart](img/flowchart.png)
+
 *Figure: General flowchart of the modeling process (see [figure source](https://docs.google.com/drawings/d/141pHKswVlhK1rKUatBV8gItk2QbzD3wzM-FzwUMG1B8/edit?usp=sharing)*
 
 # Installation
