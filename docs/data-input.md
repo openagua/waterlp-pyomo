@@ -1,4 +1,4 @@
-# General information
+# Data input
 
 This model is designed to integrate with [OpenAgua](https://www.openagua.org). General concepts related to entering data are described. Documentation about the specific syntax and functions is forthcoming.
 
