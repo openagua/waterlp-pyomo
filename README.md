@@ -59,5 +59,15 @@ NOTE: Docker is not currently set up for writing output to a local folder. So if
 
 Whether the model is run as a service or as a command, there are multiple ways to run the model.
 
-Under construction.
+## As a service
+
+When running as a service, the model runs as a task worker, by listening to task messages from a task queue and running the model based on the content of the message. This is generally the approach used when running the model from the OpenAgua web application (i.e., by clicking a "run" button).
+
+More detail forthcoming.
+
+## As a command
+
+When running as a command, the model is invoked from a command line argument or Python IDE.
+
+More detail forthcoming.
 
