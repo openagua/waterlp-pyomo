@@ -103,20 +103,18 @@
                 <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
     <ul class="nav bs-sidenav">
         <li class="main active"><a href="#data-input">Data input</a></li>
-        <li class="main "><a href="#resource-type-and-variables">Resource type and variables</a></li>
         <li class="main "><a href="#functions">Functions</a></li>
-            <li><a href="#general-concepts">General concepts</a></li>
+            <li><a href="#overview">Overview</a></li>
     </ul>
 </div></div>
                 <div class="col-md-9" role="main">
 
 <h1 id="data-input">Data input<a class="headerlink" href="#data-input" title="Permanent link">&para;</a></h1>
-<p>This model is designed to integrate with <a href="https://www.openagua.org">OpenAgua</a>. General concepts related to entering data are described. Documentation about the specific syntax and functions is forthcoming.</p>
-<h1 id="resource-type-and-variables">Resource type and variables<a class="headerlink" href="#resource-type-and-variables" title="Permanent link">&para;</a></h1>
+<p>Data may be input either directly in the form of fundamental data types of <em>time series</em>, <em>array</em>, <em>scalar</em>, or <em>descriptor</em> (text), or indirectly via Python-based functions.</p>
 <h1 id="functions">Functions<a class="headerlink" href="#functions" title="Permanent link">&para;</a></h1>
-<h2 id="general-concepts">General concepts<a class="headerlink" href="#general-concepts" title="Permanent link">&para;</a></h2>
-<p>This code is evaluated using the evaluate function found in evaluator.py. Essentially, a string representation of a function is created, with the entered code as the body of the function. All lines are indented appropriately as needed for Python. The function is then called by the evaluator and assigned to a variable. The function is run once per time step.</p>
-<p>The last line of the user-entered code is automatically prepended with "return ", such that the user doesn't need to. This is most useful for simple cases, such as a constant value:</p>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>Data input as Python code are evaluated either once at the beginning of a model run, or on a per-time step basis, depending on whether the fundamental variable data type is fixed (array, scalar, or descriptor) or temporally variable (time series), respectively.</p>
+<p>The last line of the user-entered code is automatically prepended with "return ", such that the user doesn't need to. This is most useful for simple cases, such as a constant value.</p>
 <p>However, the evaluator also automatically detects the presence of a "return " in the last line, such that the user may also include a return as desired. So <code>return x</code> on the last line is the same as <code>x</code>. In many cases, including <code>return</code> is simply a matter of personal preference. But this is particularly useful if a return is nested in the last part of a conditional statement. To demonstrate, the following three versions of code input yield the exact same result when evaluated:</p>
 <pre><code class="python">if date.month in [6,7,8]:
     x = 0.5
