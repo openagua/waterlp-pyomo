@@ -1,17 +1,14 @@
 # Data input
 
-This model is designed to integrate with [OpenAgua](https://www.openagua.org). General concepts related to entering data are described. Documentation about the specific syntax and functions is forthcoming.
-
-# Resource type and variables
-
+Data may be input either directly in the form of fundamental data types of *time series*, *array*, *scalar*, or *descriptor* (text), or indirectly via Python-based functions.
 
 # Functions
 
-## General concepts
+## Overview
 
-This code is evaluated using the evaluate function found in evaluator.py. Essentially, a string representation of a function is created, with the entered code as the body of the function. All lines are indented appropriately as needed for Python. The function is then called by the evaluator and assigned to a variable. The function is run once per time step.
+Data input as Python code are evaluated either once at the beginning of a model run, or on a per-time step basis, depending on whether the fundamental variable data type is fixed (array, scalar, or descriptor) or temporally variable (time series), respectively.
 
-The last line of the user-entered code is automatically prepended with "return ", such that the user doesn't need to. This is most useful for simple cases, such as a constant value:
+The last line of the user-entered code is automatically prepended with "return ", such that the user doesn't need to. This is most useful for simple cases, such as a constant value.
 
 However, the evaluator also automatically detects the presence of a "return " in the last line, such that the user may also include a return as desired. So `return x` on the last line is the same as `x`. In many cases, including `return` is simply a matter of personal preference. But this is particularly useful if a return is nested in the last part of a conditional statement. To demonstrate, the following three versions of code input yield the exact same result when evaluated:
 
