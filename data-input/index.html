@@ -160,12 +160,13 @@ else:
 <li><code>date</code> - A the current timestep's date as a <a href="https://pendulum.eustace.io">Pendulum</a> date object, which has numerous useful [attributes and properties] (https://pendulum.eustace.io/docs/#attributes-and-properties) (e.g., <code>date.month</code>, etc.).</li>
 <li><code>periodic_timestep</code> - An ordinal integer representing the timestep in the current water year. For example, a monthly time step model starting in October would have <code>periodic_timestep</code> of 1, 2, 3, ..., 12, with 1 in October and 12 the following September. A daily time step model would similarly range from 1 to 365 (or 366 if leap years are considered).</li>
 <li><code>water_year</code> - The current water year, which is defined by the calendar year of the <em>last month</em> in the water year. If it helps, here is the specific equation for <code>water_year</code>:</li>
+<li><code>start_date</code> and <code>end_date</code> - These are also <a href="https://pendulum.eustace.io">Pendulum</a> date objects representing--you guessed it--the start date and end date, respectively, of the model.</li>
 </ul>
+<p>For your information, here is the calculation for <code>water_year</code>:</p>
 <pre><code class="python">water_year = date.year + (0 if date.month &lt; self.start_date.month else 1)
 </code></pre>
 
-<p>where <code>self.start_date</code> is the start date of the model (don't worry if you don't understand the <code>self.</code> bit; this is for reference only). Speaking of start date...
-* <code>start_date</code> and <code>end_date</code> - These are also <a href="https://pendulum.eustace.io">Pendulum</a> date objects representing--you guessed it--the start date and end date, respectively, of the model.</p>
+<p>where <code>self.start_date</code> is the start date of the model (don't worry if you don't understand the <code>self.</code> bit; this is for reference only).</p>
 <p>This is a preliminary list, and will likely expand in the future as needs arise. Feel free to suggest something!</p>
 <h2 id="available-python-modules">Available Python modules<a class="headerlink" href="#available-python-modules" title="Permanent link">&para;</a></h2>
 <p>Under construction</p>
