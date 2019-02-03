@@ -4,8 +4,10 @@ import argparse
 from ast import literal_eval
 import multiprocessing as mp
 import os
+import shutil
 import sys
 import uuid
+import getpass
 from datetime import datetime
 from functools import partial
 from itertools import product
@@ -14,13 +16,13 @@ from copy import copy
 from waterlp.connection import connection
 from waterlp.system_class import WaterSystem
 from waterlp.scenario_class import Scenario
-from waterlp.post_reporter import Reporter as PostReporter
+from waterlp.reporters.post_reporter import Reporter as PostReporter
 from waterlp.logger import create_logger
 from waterlp.utils import create_subscenarios
 from waterlp.scenario_main import run_scenario
 
 
-def run_scenarios(args, log, **kwargs):
+def run_scenarios(args, networklog, **kwargs):
     """
         This is a wrapper for running all the scenarios, where scenario runs are
         processor-independent. As much of the Pyomo model is created here as
@@ -66,12 +68,9 @@ def run_scenarios(args, log, **kwargs):
         all_scenarios=network.scenarios,
         network=conn.network,
         template=conn.template,
-        # date_format=args.hydra_timestep_format,
         date_format='%Y-%m-%d %H:%M:%S',
         args=args,
     )
-
-    scenario_lookup = {}
 
     all_supersubscenarios = []
 
@@ -89,9 +88,9 @@ def run_scenarios(args, log, **kwargs):
         scenario = Scenario(scenario_ids=scenario_ids, conn=conn, network=conn.network, args=args)
 
         start_payload = scenario.update_payload(action='start')
+        networklog.info(msg="Model started")
         if post_reporter:
-            post_reporter.start(is_main_reporter=(args.message_protocol == 'post'),
-                                **start_payload)  # kick off reporter with heartbeat
+            post_reporter.start(is_main_reporter=(args.message_protocol == 'post'), **start_payload)
 
         else:
             print("Model started")
@@ -147,6 +146,8 @@ def run_scenarios(args, log, **kwargs):
             else:
                 print(message)
 
+            networklog.info(msg=message)
+
             raise
 
     # =======================
@@ -154,8 +155,7 @@ def run_scenarios(args, log, **kwargs):
     # =======================
 
     if args.debug:
-        run_scenario(all_supersubscenarios[0], args=args, **kwargs)
-        return
+        run_scenario(all_supersubscenarios[0], args=args, verbose=verbose, **kwargs)
     else:
         p = partial(run_scenario, args=args, verbose=verbose, **kwargs)
 
@@ -163,6 +163,7 @@ def run_scenarios(args, log, **kwargs):
         poolsize = mp.cpu_count()
         maxtasks = None
         chunksize = 1
+
         pool = mp.Pool(processes=poolsize, maxtasksperchild=maxtasks)
 
         msg = 'Running {} subscenarios in multicore mode with {} workers, {} chunks each.' \
@@ -172,7 +173,8 @@ def run_scenarios(args, log, **kwargs):
         pool.imap(p, all_supersubscenarios, chunksize=chunksize)
         pool.close()
         pool.join()
-        return
+
+    return
 
 
 def commandline_parser():
@@ -189,8 +191,11 @@ def commandline_parser():
     parser.add_argument('--app', dest='app_name', help='''Name of the app.''')
     parser.add_argument('--durl', dest='data_url', help='''The Hydra Server URL.''')
     parser.add_argument('--f', dest='filename', help='''The name of the input JSON file if running locally.''')
-    parser.add_argument('--user', dest='hydra_username', help='''The username for logging in to Hydra Server.''')
+    parser.add_argument('--user', dest='hydra_username',
+                        default=os.environ.get('HYDRA_USERNAME'),
+                        help='''The username for logging in to Hydra Server.''')
     parser.add_argument('--pw', dest='hydra_password',
+                        default=os.environ.get('HYDRA_PASSWORD'),
                         help='''The password for logging in to Hydra Server.''')
     parser.add_argument('--sid', dest='session_id',
                         help='''The Hydra Server session ID.''')
@@ -241,30 +246,23 @@ def commandline_parser():
     return parser
 
 
-args = {}
-
-
-def run_model(args_list, **kwargs):
-    global args
-    parser = commandline_parser()
-    args, unknown = parser.parse_known_args(args_list)
-    here = os.path.abspath(os.path.dirname(__file__))
-
-    # log file location - based on user
+def run_model(args, logs_dir, **kwargs):
 
     # initialize log directories
-    args.log_dir = os.path.join(here, 'logs', args.log_dir)
+    args.log_dir = os.path.join(logs_dir, args.log_dir)
 
     # specify scenarios log dir
     args.scenario_log_dir = 'scenario_logs'
     args.scenario_log_dir = os.path.join(args.log_dir, args.scenario_log_dir)
 
     if not os.path.exists(args.log_dir):
+        os.makedirs(args.log_dir)
+    if not os.path.exists(args.scenario_log_dir):
         os.makedirs(args.scenario_log_dir)
 
     # create top-level log file
     logfile = os.path.join(args.log_dir, 'log.txt')
-    log = create_logger(args.app_name, logfile, '%(asctime)s - %(message)s')
+    networklog = create_logger(args.app_name, logfile, '%(asctime)s - %(message)s')
 
     # pre-processing
     if args.scenario_ids:
@@ -273,13 +271,25 @@ def run_model(args_list, **kwargs):
     argdict = args.__dict__.copy()
     argtuples = sorted(argdict.items())
     args_str = '\n\t'.join([''] + ['{}: {}'.format(a[0], a[1]) for a in argtuples])
-    log.info('started model run with args: %s' % args_str)
+    networklog.info('started model run with args: %s' % args_str)
 
-    run_scenarios(args, log, **kwargs)
+    if 'ably_auth_url' not in kwargs:
+        kwargs['ably_auth_url'] = os.environ.get('ABLY_AUTH_URL')
+
+    run_scenarios(args, networklog, **kwargs)
+
+    return
 
 
 if __name__ == '__main__':
     try:
-        run_model(sys.argv[1:])
+        parser = commandline_parser()
+        args, unknown = parser.parse_known_args(sys.argv[1:])
+
+        app_dir = '/home/{}/.waterlp'.format(getpass.getuser())
+        if os.path.exists(app_dir):
+            shutil.rmtree(app_dir)
+        logs_dir = '{}/logs'.format(app_dir)
+        run_model(args, logs_dir)
     except Exception as e:
         print(e, file=sys.stderr)

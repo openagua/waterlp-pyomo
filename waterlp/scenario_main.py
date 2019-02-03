@@ -1,18 +1,18 @@
-import traceback
-from io import StringIO
+from datetime import datetime
 
 from pyomo.opt import SolverFactory, SolverStatus, TerminationCondition
 
 from waterlp.pyomo_model import create_model
-from waterlp.post_reporter import Reporter as PostReporter
-from waterlp.ably_reporter import AblyReporter
-from waterlp.screen_reporter import ScreenReporter
+from waterlp.reporters.post_reporter import Reporter as PostReporter
+from waterlp.reporters.ably_reporter import AblyReporter
+from waterlp.reporters.screen_reporter import ScreenReporter
 
 current_step = 0
 total_steps = 0
 
 
-def run_scenario(supersubscenario, args=None, verbose=False, **kwargs):
+def run_scenario(supersubscenario, args, verbose=False, **kwargs):
+
     global current_step, total_steps
 
     system = supersubscenario.get('system')
@@ -26,7 +26,8 @@ def run_scenario(supersubscenario, args=None, verbose=False, **kwargs):
         post_reporter.is_main_reporter = True
         reporter = post_reporter
     elif args.message_protocol == 'ably':  # i.e. www.ably.io
-        reporter = AblyReporter(args, post_reporter, ably_auth_url=kwargs.pop('ably_auth_url', None))
+        ably_auth_url = args.ably_auth_url if 'ably_auth_url' in args else kwargs.pop('ably_auth_url', None)
+        reporter = AblyReporter(args, ably_auth_url=ably_auth_url, post_reporter=post_reporter)
 
     if reporter:
         reporter.updater = system.scenario.update_payload
@@ -43,19 +44,11 @@ def run_scenario(supersubscenario, args=None, verbose=False, **kwargs):
 
     except Exception as err:
 
-        # print(e, file=sys.stderr)
-        # # Exception logging inspired by: https://seasonofcode.com/posts/python-multiprocessing-and-exceptions.html
-        # exc_buffer = StringIO()
-        # traceback.print_exc(file=exc_buffer)
-        # msg = 'At step ' + str(current_step) + ' of ' + str(total_steps) + ': ' + \
-        #       str(e) + '\nUncaught exception in worker process:\n' + exc_buffer.getvalue()
-        # if current_step:
-        #     msg += '\n\nPartial results have been saved'
-
         print(err)
 
         if reporter:
             reporter.report(action='error', message=str(err))
+
 
 
 def _run_scenario(system=None, args=None, supersubscenario=None, reporter=None, verbose=False):
@@ -91,6 +84,8 @@ def _run_scenario(system=None, args=None, supersubscenario=None, reporter=None, 
 
     runs = range(system.nruns)
     n = len(runs)
+
+    now = datetime.now()
 
     i = 0
     while i < n:
@@ -154,8 +149,18 @@ def _run_scenario(system=None, args=None, supersubscenario=None, reporter=None, 
         system.scenario.finished += 1
         system.scenario.current_date = current_dates_as_string[0]
 
-        if system.scenario.reporter:
+        # 6. REPORT PROGRESS
+        system.scenario.finished += 1
+        system.scenario.current_date = current_dates_as_string[0]
+
+        new_now = datetime.now()
+        should_report_progress = ts == 0 or current_step == n or (new_now - now).seconds >= 2
+        # system.dates[ts].month != system.dates[ts - 1].month and (new_now - now).seconds >= 1
+
+        if system.scenario.reporter and should_report_progress:
             system.scenario.reporter.report(action='step')
+
+            now = new_now
 
         # update the model instance
         if ts != runs[-1]:

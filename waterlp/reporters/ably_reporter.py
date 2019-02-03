@@ -5,7 +5,7 @@ import logging
 
 class AblyReporter(object):
 
-    def __init__(self, args, post_reporter, ably_auth_url=None):
+    def __init__(self, args, ably_auth_url=None, post_reporter=None):
         self.args = args
         self.post_reporter = post_reporter
         channel_name = u'com.openagua.update_s{}n{}'.format(args.source_id, args.network_id)
@@ -19,7 +19,12 @@ class AblyReporter(object):
         # elif ably_token_request:
         #     rest = AblyRest(token=ably_token_request)
         else:
-            rest = AblyRest(key=environ.get('ABLY_API_KEY'))
+            ably_api_key = environ.get('ABLY_API_KEY')
+            if ably_api_key:
+                rest = AblyRest(key=environ.get('ABLY_API_KEY'))
+            else:
+                self.channel = None
+                return
         self.channel = rest.channels.get(channel_name)
         self.updater = None
 
@@ -40,7 +45,10 @@ class AblyReporter(object):
         if self.updater:
             payload = self.updater(action=action, **payload)
         if action in ['step', 'save']:
-            self.channel.publish(action, payload)
+            if self.channel:
+                self.channel.publish(action, payload)
+            # elif self.post_reporter:
+            #     self.post_reporter.report(**payload)
         else:
             if self.post_reporter:
                 self.post_reporter.report(**payload)
