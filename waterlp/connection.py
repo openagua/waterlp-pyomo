@@ -1,6 +1,7 @@
 import json
 
 from requests import post
+from attrdict import AttrDict
 
 
 class connection(object):
@@ -10,11 +11,11 @@ class connection(object):
         self.filename = args.filename
         self.app_name = args.app_name
         self.session_id = args.session_id
-        self.user_id = int(args.user_id)
+        self.user_id = args.user_id
         self.log = log
 
-        self.network_id = int(args.network_id)
-        self.template_id = int(args.template_id) if args.template_id else None
+        self.network_id = args.network_id
+        self.template_id = args.template_id if args.template_id else None
 
         get_network_params = dict(
             network_id=self.network_id,
@@ -27,7 +28,7 @@ class connection(object):
 
         if args.filename:
             with open(args.filename) as f:
-                data = json.load(f, object_hook=JSONObject)
+                data = json.load(f, object_hook=AttrDict)
                 self.network = data.get('network')
                 self.template = data.get('template')
                 self.template_attributes = data.get('template_attributes')

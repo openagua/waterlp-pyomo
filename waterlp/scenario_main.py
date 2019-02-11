@@ -1,19 +1,12 @@
 from datetime import datetime
 
-from pyomo.opt import SolverFactory, SolverStatus, TerminationCondition
+from pyomo.opt import SolverStatus, TerminationCondition
 
-from waterlp.pyomo_model import create_model
 from waterlp.reporters.post_reporter import Reporter as PostReporter
 from waterlp.reporters.ably_reporter import AblyReporter
 from waterlp.reporters.screen_reporter import ScreenReporter
 
-current_step = 0
-total_steps = 0
-
-
 def run_scenario(supersubscenario, args, verbose=False, **kwargs):
-
-    global current_step, total_steps
 
     system = supersubscenario.get('system')
 
@@ -50,9 +43,7 @@ def run_scenario(supersubscenario, args, verbose=False, **kwargs):
             reporter.report(action='error', message=str(err))
 
 
-
 def _run_scenario(system=None, args=None, supersubscenario=None, reporter=None, verbose=False):
-    global current_step, total_steps
 
     debug = args.debug
 
@@ -62,7 +53,7 @@ def _run_scenario(system=None, args=None, supersubscenario=None, reporter=None, 
     # intialize
     system.initialize(supersubscenario)
 
-    system.model = create_model(
+    system.create_model(
         name=system.name,
         nodes=list(system.nodes.keys()),
         links=list(system.links.keys()),
@@ -73,14 +64,6 @@ def _run_scenario(system=None, args=None, supersubscenario=None, reporter=None, 
         debug_gain=args.debug_gain,
         debug_loss=args.debug_loss
     )
-
-    system.instance = system.model.create_instance()
-
-    system.update_internal_params()
-
-    optimizer = SolverFactory(args.solver)
-
-    total_steps = len(system.dates)
 
     runs = range(system.nruns)
     n = len(runs)
@@ -105,53 +88,12 @@ def _run_scenario(system=None, args=None, supersubscenario=None, reporter=None, 
         # CORE SCENARIO ROUTINE
         #######################
 
-        current_dates = system.dates[ts:ts + system.foresight_periods]
-        current_dates_as_string = system.dates_as_string[ts:ts + system.foresight_periods]
+        # system.update_internal_params()
 
         # solve the model
-        try:
-            results = optimizer.solve(system.instance)
-        except:
-            system.save_results()
-            msg = 'ERROR: Unknown error at step {} of {} ({}). Partial results have been saved.'.format(
-                current_step, total_steps, current_dates[0]
-            )
-            if system.scenario.reporter:
-                system.scenario.reporter.report(action='error', message=msg)
-            raise Exception(msg)
-
-        if (results.solver.status == SolverStatus.ok) \
-                and (results.solver.termination_condition == TerminationCondition.optimal):
-            system.collect_results(current_dates_as_string, tsidx=i, suppress_input=args.suppress_input)
-
-        elif results.solver.termination_condition == TerminationCondition.infeasible:
-            system.save_results()
-            msg = 'ERROR: Problem is infeasible at step {} of {} ({}). Partial results have been saved.'.format(
-                current_step, total_steps, current_dates[0]
-            )
-            if system.scenario.reporter:
-                system.scenario.reporter.report(action='error', message=msg)
-            raise Exception(msg)
-
-        else:
-            system.save_results()
-            msg = 'ERROR: Something went wrong at step {} of {} ({}). This might indicate an infeasibility, but not necessarily.'.format(
-                current_step, total_steps, current_dates[0]
-            )
-            print(msg)
-            if system.scenario.reporter:
-                system.scenario.reporter.report(action='error', message=msg)
-            raise Exception(msg)
-
-        # load the results
-        system.instance.solutions.load_from(results)
-
-        system.scenario.finished += 1
-        system.scenario.current_date = current_dates_as_string[0]
+        system.run(current_step, i, ts)
 
         # 6. REPORT PROGRESS
-        system.scenario.finished += 1
-        system.scenario.current_date = current_dates_as_string[0]
 
         new_now = datetime.now()
         should_report_progress = ts == 0 or current_step == n or (new_now - now).seconds >= 2
@@ -167,16 +109,15 @@ def _run_scenario(system=None, args=None, supersubscenario=None, reporter=None, 
             ts_next = runs[i + 1]
             try:
                 system.update_initial_conditions()
-                system.update_boundary_conditions(ts, ts + system.foresight_periods, 'intermediary')
-                system.update_boundary_conditions(ts_next, ts_next + system.foresight_periods, 'model')
-                system.update_internal_params()  # update internal parameters that depend on user-defined variables
+                system.update_boundary_conditions(ts, ts + system.foresight_periods, 'pre-process')
+                system.update_boundary_conditions(ts_next, ts_next + system.foresight_periods, 'main')
             except Exception as err:
                 # we can still save results to-date
                 # system.save_results()
                 msg = 'ERROR: Something went wrong at step {timestep} of {total} ({date}):\n\n{err}'.format(
                     timestep=current_step,
-                    total=total_steps,
-                    date=current_dates[0].date(),
+                    total=system.total_steps,
+                    date=system.current_dates[0].date(),
                     err=err
                 )
                 print(msg)

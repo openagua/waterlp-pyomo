@@ -1,18 +1,15 @@
+# TODO: convert to Alpine to reduce image size
 FROM ubuntu:latest
 MAINTAINER David Rheinheimer "drheinheimer@umass.edu"
 
-ARG VERSION=0.1
-
 RUN apt-get update && apt-get install -y build-essential
 RUN apt-get install -y glpk-utils
-RUN apt-get install -y python3 python3-pip
-RUN pip3 install --upgrade pip
+RUN apt-get install -y python3 python3-pip python3-dev
+RUN python3 -m pip install --upgrade pip
 
-COPY requirements.txt /home/requirements.txt
-ADD /waterlp /home/waterlp
+ADD . /user/local/model
+WORKDIR /user/local/model
 
-WORKDIR /home
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip3 install -r requirements.txt
 
-WORKDIR /waterlp
-#RUN python3 ./setup.py build_ext --inplace
+CMD ["python3", "listen.py"]

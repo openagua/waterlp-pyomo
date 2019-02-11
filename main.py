@@ -8,17 +8,18 @@ import shutil
 import sys
 import uuid
 import getpass
+import json
 from datetime import datetime
 from functools import partial
 from itertools import product
 from copy import copy
 
 from waterlp.connection import connection
-from waterlp.system_class import WaterSystem
+from waterlp.models.system import WaterSystem
 from waterlp.scenario_class import Scenario
 from waterlp.reporters.post_reporter import Reporter as PostReporter
 from waterlp.logger import create_logger
-from waterlp.utils import create_subscenarios
+from waterlp.utils.scenarios import create_subscenarios
 from waterlp.scenario_main import run_scenario
 
 
@@ -54,12 +55,12 @@ def run_scenarios(args, networklog, **kwargs):
 
     conn = connection(args=args, scenario_ids=all_scenario_ids)
 
+    # this gets all scenarios in the system, not just the main scenarios of interest, but without data
+    network = conn.get_basic_network()
+
     # ====================================
     # define subscenarios (aka variations)
     # ====================================
-
-    # this gets all scenarios in the system, not just the main scenarios of interest, but without data
-    network = conn.get_basic_network()
 
     # create the system
     base_system = WaterSystem(

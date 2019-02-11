@@ -3,7 +3,8 @@ from pyomo.environ import AbstractModel, Set, Objective, Var, Param, Constraint,
 
 
 # create the model
-def create_model(name, nodes, links, types, ts_idx, params, blocks, debug_gain=False, debug_loss=False):
+def create_model(name=None, nodes=None, links=None, types=None, ts_idx=None, params=None, blocks=None, debug_gain=False,
+                 debug_loss=False):
     m = AbstractModel(name=name)
 
     # SETS
@@ -121,7 +122,7 @@ def create_model(name, nodes, links, types, ts_idx, params, blocks, debug_gain=F
 
     # parameters to convert priorities to values
     m.nodeValueDB = Param(m.NodeBlocks * m.TS, default=0, mutable=True)
-    m.linkValueDB = Param(m.LinkBlocks * m.TS, default=0, mutable=True)
+    # m.linkValueDB = Param(m.LinkBlocks * m.TS, default=0, mutable=True)
 
     # CONSTRAINTS
 
@@ -327,10 +328,10 @@ def create_model(name, nodes, links, types, ts_idx, params, blocks, debug_gain=F
         # Link demand / value not yet implemented
 
         fn = summation(m.nodeValueDB, m.nodeDeliveryDB) \
-                   - 10 * summation(m.floodStorage) \
-                   - 5 * summation(m.nodeSpill) \
-                   # - 1 * summation(m.emptyStorage)
-                   # - 1000 * summation(m.virtualPrecipGain) \
+             - 10 * summation(m.floodStorage) \
+             - 5 * summation(m.nodeSpill) \
+            # - 1 * summation(m.emptyStorage)
+        # - 1000 * summation(m.virtualPrecipGain) \
         fn_debug_gain = - 1000 * summation(m.debugGain) if debug_gain else 0
         fn_debug_loss = - 1000 * summation(m.debugLoss) if debug_loss else 0
 

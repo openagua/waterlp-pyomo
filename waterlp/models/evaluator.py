@@ -6,6 +6,7 @@ from copy import copy
 from numpy import mean
 from math import isnan, log
 import pandas
+import numpy
 from calendar import isleap
 
 import pendulum
@@ -56,6 +57,10 @@ def get_scenario_data(evaluator, **kwargs):
     kwargs['scenario_id'] = [evaluator.scenario_id]
     res_attr_data = evaluator.conn.get_res_attr_data(**kwargs)
 
+    # if type(res_attr_data) == list:
+    #     data_type = kwargs.get('data_type')
+    #     res_attr_data = [value for value in res_attr_data if value.value.type == data_type]
+
     if res_attr_data and 'errorcode' not in res_attr_data:
         res_attr_data = res_attr_data[0]
         # evaluate the data
@@ -63,6 +68,7 @@ def get_scenario_data(evaluator, **kwargs):
 
         eval_value = evaluator.eval_data(
             value=res_attr_data.value,
+            data_type=kwargs.get('data_type'),
             do_eval=False,
             date_format=evaluator.date_format
         )
@@ -163,13 +169,19 @@ def eval_timeseries(timeseries, dates, fill_value=None, flatten=False, has_block
             elif method:
                 df.fillna(method=method)
 
-        if flavor == 'json':
+        result = None
+        if flatten:
+            df = df.sum(axis=1)
+
+        if flavor == 'pandas':
+            result = df
+        elif flavor == 'native':
+            df.index = df.index.strftime(date_format)
+            result = df.to_dict()
+        elif flavor == 'json':
             result = df.to_json(date_format=date_format)
         else:
-            df.index = df.index.strftime(date_format)
-            if flatten:
-                df = df.sum(axis=1)
-            result = df.to_dict()
+            result = None
 
         returncode = 0
         errormsg = 'No errors!'
@@ -182,13 +194,13 @@ def eval_timeseries(timeseries, dates, fill_value=None, flatten=False, has_block
 def eval_array(array, flavor=None):
     result = None
     try:
-        temp = json.loads(array)
+        array_as_list = json.loads(array)
         if flavor is None:
             result = array
-        elif flavor == 'list':
-            result = temp
+        elif flavor == 'native':
+            result = array_as_list
         elif flavor == 'pandas':
-            result = pandas.DataFrame(temp)
+            result = pandas.DataFrame(array_as_list)
         returncode = 0
         errormsg = 'No errors!'
     except:
@@ -199,15 +211,12 @@ def eval_array(array, flavor=None):
     return returncode, errormsg, result
 
 
-def parse_function(s, name, argnames):
+def parse_function(s, name, argnames, modules=()):
     '''Parse a function into usable Python'''
     spaces = '\n    '
 
     # modules
-    # modules = spaces.join('import {}'.format(m) for m in modules)
-
-    # functions
-    # functions = spaces.join(['{func} = self.{func}'.format(func=f) for f in functions])
+    modules = spaces.join('import {}'.format(m) for m in modules)
 
     # getargs (these pass to self.GET)
     kwargs = spaces.join(['{arg} = kwargs.get("{arg}")'.format(arg=arg) for arg in argnames])
@@ -220,8 +229,8 @@ def parse_function(s, name, argnames):
     code = spaces.join(lines)
 
     # final function
-    func = '''def {name}(self, **kwargs):{spaces}{kwargs}{spaces}{spaces}{code}''' \
-        .format(spaces=spaces, kwargs=kwargs, code=code, name=name)
+    func = '''def {name}(self, **kwargs):{spaces}{modules}{spaces}{kwargs}{spaces}{code}''' \
+        .format(spaces=spaces, modules=modules, kwargs=kwargs, code=code, name=name)
 
     return func
 
@@ -247,7 +256,7 @@ def make_dates(settings, date_format=True, data_type='timeseries'):
 
         periodic_timesteps = []
         if timestep == 'day':
-            dates = period.range("days")
+            dates = list(period.range("days"))
             pt = 0
             for i, date in enumerate(dates):
                 if (date.month, date.day) == (start_date.month, start_date.day):
@@ -270,7 +279,7 @@ def make_dates(settings, date_format=True, data_type='timeseries'):
                 dates.append(date)
                 periodic_timesteps.append(i % 52 + 1)
         elif timestep == 'month':
-            dates = period.range("months")
+            dates = list(period.range("months"))
             periodic_timesteps = [i % 12 + 1 for i, date in enumerate(dates)]
         elif timestep == 'thricemonthly':
             dates = []
@@ -287,6 +296,7 @@ def make_dates(settings, date_format=True, data_type='timeseries'):
 
     else:
         return None, None, None
+
 
 def make_default_value(data_type='timeseries', dates=None, nblocks=1, flavor='json', date_format='iso'):
     if data_type == 'timeseries':
@@ -325,7 +335,7 @@ class namespace:
 
 
 class Evaluator:
-    def __init__(self, conn=None, scenario_id=None, settings=None, date_format='iso', data_type='timeseries', nblocks=1):
+    def __init__(self, conn=None, scenario_id=None, settings=None, date_format='iso', data_type='timeseries'):
         self.conn = conn
         self.dates_as_string, self.dates, self.periodic_timesteps = make_dates(settings, data_type=data_type)
         self.start_date = self.dates[0]
@@ -333,11 +343,12 @@ class Evaluator:
         self.scenario_id = scenario_id
         self.data_type = data_type
         self.date_format = date_format
-        self.default_timeseries = make_default_value('timeseries', self.dates_as_string, flavor='dict',
+        self.default_timeseries = make_default_value('timeseries', self.dates_as_string, flavor='native',
                                                      date_format='original')
         self.default_array = make_default_value('array')
         self.resource_scenarios = {}
         self.external = {}
+        self.block_params = []
 
         self.network_files_path = settings.get('network_files_path')
 
@@ -371,13 +382,12 @@ class Evaluator:
                   date_format='iso', has_blocks=False, data_type=None, parentkey=None):
 
         try:
-            # create the data depending on data type
 
+            # create the data depending on data type
             returncode = None
             errormsg = None
             result = None
 
-            # metadata = json.loads(resource_scenario.value.metadata)
             metadata = json.loads(value.get('metadata', '{}'))
             if func is None:
                 func = metadata.get('function')
@@ -421,7 +431,7 @@ class Evaluator:
                 )
 
             elif data_type == 'array':
-                returncode, errormsg, result = eval_array(value.value)
+                returncode, errormsg, result = eval_array(value.value, flavor=flavor)
 
             elif data_type == 'descriptor':
                 returncode, errormsg, result = eval_descriptor(value.value)
@@ -527,12 +537,15 @@ class Evaluator:
                 if val and data_type in ['timeseries', 'periodic timeseries'] and isnan(val):
                     errormsg = "Attribute value is not a number."
                     raise Exception(errormsg)
+                elif val is None:
+                    return None, None, None
                 else:
                     self.hashstore[hashkey][timestep] = val
                 if self.data_type != 'timeseries':
                     break
 
             values = self.hashstore[hashkey][tsi:]
+
             if data_type in ['timeseries', 'periodic timeseries']:
                 dates_idx = self.dates_as_string[tsi:tsf]
                 if type(values[0]) in (list, tuple):
@@ -552,7 +565,7 @@ class Evaluator:
                         result = pandas.DataFrame(data=values, index=dates_idx).to_json(date_format='iso')
                     elif flavor == 'pandas':
                         result = pandas.DataFrame(data=values, index=dates_idx)
-                    else:
+                    elif flavor == 'native':
                         result = self.store.get(parentkey, {})
                         if has_blocks and not flatten:
                             vals = {d: v for d, v in zip(dates_idx, values)}
@@ -588,9 +601,32 @@ class Evaluator:
         return self.get(key, **kwargs)
 
     def get(self, key, **kwargs):
-        '''
-        This is used to get data from another variable, or another time step, possibly aggregated
-        '''
+        """
+        Get data from another variable, or another time step, possibly aggregated.
+
+        Parameters
+        ----------
+        offset : int
+            The timestep offset of the value to return. For example, offset==1 returns the value from the previous
+            timestep.
+        start : str or Pendulum date object
+            This indicates that the value should be aggregated from more than one timestep, with start indicating the
+            start date of the aggregation period. The value should be either a Pendulum date object or a string that
+            Pendulum can properly parse.
+        end : str or Pendulum date object
+            If aggregating a value, the end date of the aggregation period. The value should be either a Pendulum date
+            object or a string that Pendulum can properly parse. If the end date should be the current date, this can be
+            omitted.
+        agg : str
+            If aggregating a value, this indicates how the value should be aggregated. Options include "mean" and "sum".
+            Default is "sum".
+
+        Returns
+        -------
+        int
+            Returns the value or aggregated value of the variable.
+
+        """
 
         try:
 
@@ -629,7 +665,13 @@ class Evaluator:
 
                 result = self.store[key].get(offset_date_as_string)
 
-            flavor = kwargs.get('flavor')
+            default_flavor = None
+            if rs_value['type'] == 'timeseries':
+                default_flavor = 'native'
+            elif rs_value['type'] == 'array':
+                default_flavor = 'native'
+            flavor = kwargs.get('flavor', default_flavor)
+
             tattr = self.conn.tattrs[(ref_key, ref_id, attr_id)]
             has_blocks = tattr['properties'].get('has_blocks') or tattr['attr_name'] in self.block_params
             # need to evaluate the data anew only as needed
@@ -663,24 +705,28 @@ class Evaluator:
                     #     self.store[key] = {}
 
                     if start:
+
                         if type(start) == str:
                             start = pendulum.parse(start)
                         if type(end) == str:
                             end = pendulum.parse(end)
 
                         if key != parentkey:
-                            if flavor == 'pandas':
-                                result = value.loc[start.to_datetime_string():end.to_datetime_string()].agg(agg)[0]
-                            else:
-                                idx_start = self.dates.index(start)
-                                idx_end = self.dates.index(end)
-                                if has_blocks:
-                                    value = value[0]  # TODO: make this more sophisticated
-                                values = list(value.values())[idx_start:idx_end]
-                                if agg == 'sum':
-                                    result = sum(values)
-                                elif agg == 'mean':
-                                    result = sum(values) / len(values)
+                            start_as_string = start.to_datetime_string()
+                            end_as_string = end.to_datetime_string()
+                            if default_flavor == 'pandas':
+                                result = value.loc[start_as_string:end_as_string].agg(agg)[0]
+                            elif default_flavor == 'native':
+                                if flatten:
+                                    values = value
+                                else:
+                                    values = list(value.values())[0]
+                                vals = [values[key] for key in values.keys() if
+                                        key >= start_as_string and key <= end_as_string]
+                                if agg == 'mean':
+                                    result = numpy.mean(vals)
+                                elif agg == 'sum':
+                                    result = numpy.sum(vals)
 
                         else:
                             result = None
@@ -725,7 +771,8 @@ class Evaluator:
             return result
 
         except:
-            raise
+            res_info = key
+            raise Exception("Error getting data for key {}".format(res_info))
 
     def read_csv(self, path, **kwargs):
 
@@ -751,7 +798,7 @@ class Evaluator:
                     interp_args['method'] = interp_method
                 df.interpolate(inplace=True, **interp_args)
 
-            if flavor == 'dict':
+            if flavor == 'native':
                 data = df.to_dict()
             elif flavor == 'dataframe':
                 data = df
