@@ -572,7 +572,7 @@ class Evaluator:
                             for block in [0]:  # TODO: update this to include custom blocks
                                 if block not in result:
                                     result[block] = {}
-                                    result[block].update(vals)
+                                result[block].update(vals)
                         else:
                             result = self.store.get(parentkey, {})
                             result.update({d: v for d, v in zip(dates_idx, values)})

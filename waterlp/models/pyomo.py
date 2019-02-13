@@ -1,9 +1,17 @@
 from pyomo.environ import AbstractModel, Set, Objective, Var, Param, Constraint, Reals, NonNegativeReals, minimize, \
     maximize, summation
 
+demand_block_names = {
+    'nodeBaseValue': 'nodeBaseHydropowerValueDB',
+    'nodeStorageValue': 'nodeStorageValueDB',
+    'nodeValue': 'nodeValueDB'
+}
+
 
 # create the model
-def create_model(name=None, nodes=None, links=None, types=None, ts_idx=None, params=None, blocks=None, debug_gain=False,
+def create_model(name=None, nodes=None, links=None, types=None, ts_idx=None, params=None, block_params=None,
+                 variables=None,
+                 blocks=None, debug_gain=False,
                  debug_loss=False):
     m = AbstractModel(name=name)
 
@@ -34,7 +42,8 @@ def create_model(name=None, nodes=None, links=None, types=None, ts_idx=None, par
     # sets for non-storage nodes
     m.Storage = m.Reservoir | m.Groundwater  # union
     m.NonStorage = m.Nodes - m.Storage  # difference
-    m.DemandNodes = m.GeneralDemand | m.UrbanDemand | m.Hydropower | m.FlowRequirement  # we should eliminate differences
+    # m.DemandNodes = m.GeneralDemand | m.UrbanDemand | m.Hydropower | m.FlowRequirement
+    m.DemandNodes = m.GeneralDemand | m.UrbanDemand
     m.NonJunction = m.Nodes - m.Junction
 
     # sets for links with channel capacity
@@ -43,41 +52,56 @@ def create_model(name=None, nodes=None, links=None, types=None, ts_idx=None, par
     def nodeBlockLookup(i):
         return blocks['node'].get(i, [(0, 0)])
 
-    def linkBlockLookup(i, j):
-        return blocks['link'].get((i, j), [(0, 0)])
+    # def linkBlockLookup(i, j):
+    #     return blocks['link'].get((i, j))
 
     # set - all blocks in each demand or reservoir node, and identify node-blocks
     def nodeBlockLookup_init(m):
-        for i in m.NonJunction:
+        for i in (m.DemandNodes | m.Hydropower | m.Storage):
             return nodeBlockLookup(i)
 
     m.NodeBlockLookup = Set(dimen=2, initialize=nodeBlockLookup_init)
 
     # set - all blocks in each link
-    def linkBlockLookup_init(m):
-        for (i, j) in m.Links:
-            return linkBlockLookup(i, j)
+    # def linkBlockLookup_init(m):
+    #     for (i, j) in m.Links:
+    #         return linkBlockLookup(i, j)
 
-    m.LinkBlockLookup = Set(dimen=2, initialize=linkBlockLookup_init)
+    # m.LinkBlockLookup = Set(dimen=2, initialize=linkBlockLookup_init)
 
     # create node-block and link-block sets
 
     def NodeBlock(m):
-        return [(j, b, sb) for j in (m.Storage | m.DemandNodes) for (b, sb) in nodeBlockLookup(j)]
+        return [(j, b, sb) for j in m.DemandNodes for (b, sb) in nodeBlockLookup(j)]
 
-    def LinkBlock(m):
-        return [(i, j, b, sb) for i, j in m.Links for (b, sb) in linkBlockLookup(i, j)]
+    def StorageBlock(m):
+        return [(j, b, sb) for j in m.Storage for (b, sb) in nodeBlockLookup(j)]
+
+    def HydropowerBlock(m):
+        return [(j, b, sb) for j in m.Hydropower for (b, sb) in nodeBlockLookup(j)]
+
+    # def LinkBlock(m):
+    #     return [(i, j, b, sb) for i, j in m.Links for (b, sb) in linkBlockLookup(i, j)]
 
     m.NodeBlocks = Set(dimen=3, initialize=NodeBlock)
-    m.LinkBlocks = Set(dimen=4, initialize=LinkBlock)
+    m.StorageBlocks = Set(dimen=3, initialize=StorageBlock)
+    m.HydropowerBlocks = Set(dimen=3, initialize=HydropowerBlock)
+    # m.LinkBlocks = Set(dimen=4, initialize=LinkBlock)
 
     # DECISION VARIABLES (all variables should be prepended with resource type)
 
     m.nodeDelivery = Var(m.DemandNodes * m.TS, domain=NonNegativeReals)  # delivery to demand nodes
     m.nodeStorageDelivery = Var(m.Storage * m.TS, domain=NonNegativeReals)  # delivery to storage nodes
+    m.nodeFlowRequirementDelivery \
+        = Var(m.FlowRequirement * m.TS, domain=NonNegativeReals)  # delivery to flow requirement nodes
+    m.nodeHydropowerDelivery \
+        = Var(m.Hydropower * m.TS, domain=NonNegativeReals)  # delivery to hydropower nodes
+
     m.nodeDeliveryDB = Var(m.NodeBlocks * m.TS, domain=NonNegativeReals)  # delivery to demand nodes
-    m.linkDelivery = Var(m.Links * m.TS, domain=NonNegativeReals)  # not valued yet; here as a placeholder
-    m.linkDeliveryDB = Var(m.LinkBlocks * m.TS, domain=NonNegativeReals)
+    m.nodeStorageDB = Var(m.StorageBlocks * m.TS, domain=NonNegativeReals)  # delivery to demand nodes
+    m.nodeHydropowerDB = Var(m.HydropowerBlocks * m.TS, domain=NonNegativeReals)  # delivery to hydropower
+    # m.linkDelivery = Var(m.Links * m.TS, domain=NonNegativeReals)  # not valued yet; here as a placeholder
+    # m.linkDeliveryDB = Var(m.LinkBlocks * m.TS, domain=NonNegativeReals)
     m.nodeStorage = Var(m.Storage * m.TS, domain=NonNegativeReals)  # storage
 
     # m.nodeDemandDeficit = Var(m.NodeBlocks * m.TS, domain=NonNegativeReals, initialize=0.0)
@@ -97,6 +121,9 @@ def create_model(name=None, nodes=None, links=None, types=None, ts_idx=None, par
     m.linkInflow = Var(m.Links * m.TS, domain=NonNegativeReals)  # total inflow to a link
     m.linkOutflow = Var(m.Links * m.TS, domain=NonNegativeReals)  # total outflow from a link
 
+    # hydropower
+    m.nodeExcessHydropower = Var(m.Hydropower * m.TS, domain=NonNegativeReals)
+
     m.nodeRelease = Var(m.Reservoir * m.TS, domain=NonNegativeReals)  # controlled release to a river
     m.nodeSpill = Var(m.Reservoir * m.TS, domain=NonNegativeReals)  # uncontrolled/undesired release to a river
     m.nodeExcess = Var((m.FlowRequirement | m.Hydropower) * m.TS, domain=NonNegativeReals)
@@ -109,19 +136,76 @@ def create_model(name=None, nodes=None, links=None, types=None, ts_idx=None, par
 
     # PARAMETERS
 
-    # TODO: replace this with explicit declarations
     for param_name, param in params.items():
-        if param['is_var'] == 'N':
-            initial_values = param.get('initial_values')  # initial values is used in expression execution
-            expression = param.get('expression')
-            if expression:
-                exec(expression)
+
+        if param['is_var'] == 'Y':
+            continue
+
+        data_type = param['data_type']
+        resource_type = param['resource_type']
+        attr_name = param['attr_name']
+        unit = param['unit']
+        intermediary = param['intermediary']
+
+        properties = param.get('properties', {})
+        has_blocks = properties.get('has_blocks', False) or attr_name in block_params
+
+        if intermediary or resource_type == 'network':
+            continue
+
+        initial_values = variables.get(param_name, None)
+
+        mutable = True  # assume all variables are mutable
+        default = 0  # TODO: define in template rather than here
+
+        if data_type == 'scalar':
+            param_definition = 'm.{resource_type}s'
+
+        elif data_type == 'timeseries':
+            if param_name == 'linkFlowCapacity':
+                default = -1
+                param_definition = 'm.ConstrainedLink'
+            elif param_name in ['nodeViolationCost', 'nodeRequirement']:
+                param_definition = 'm.FlowRequirement'
+            elif has_blocks and resource_type == 'node':
+                if param_name in ['nodeWaterDemand', 'nodeBaseValue']:
+                    param_definition = 'm.HydropowerBlocks'
+                elif param_name in ['nodeStorageDemand', 'nodeStorageValue']:
+                    param_definition = 'm.StorageBlocks'
+                else:
+                    param_definition = 'm.{resource_type}Blocks'
+            else:
+                param_definition = 'm.{resource_type}s'
+            param_definition += ', m.TS'
+
+        elif data_type == 'array':
+            continue  # placeholder
+
+        else:
+            # this includes descriptors, which have no place in the LP model yet
+            continue
+
+        param_definition += ', default={default}, mutable={mutable}'.format(
+            default=default,
+            mutable=mutable
+        )
+        if initial_values is not None:
+            param_definition += ', initialize=initial_values'
+            # TODO: This is an opportunity for allocating memory in a Cythonized version?
+        param_definition = param_definition.format(resource_type=resource_type.title())
+        expression = 'Param({param_definition})'.format(param_definition=param_definition)
+        pyomo_param = eval(expression)
+        pyomo_name = demand_block_names.get(param_name, param_name)
+        setattr(m, pyomo_name, pyomo_param)
 
     m.nodeLocalGain = Param(m.Nodes, m.TS, default=0)  # placeholder
     m.nodeLocalLoss = Param(m.Nodes, m.TS, default=0)  # placeholder
 
     # parameters to convert priorities to values
-    m.nodeValueDB = Param(m.NodeBlocks * m.TS, default=0, mutable=True)
+    # m.nodeValueDB = Param(m.NodeBlocks * m.TS, default=0, mutable=True)
+    # m.nodeStorageValueDB = Param(m.StorageBlocks * m.TS, default=0, mutable=True)
+    # m.nodeBaseHydropowerValueDB = Param(m.HydropowerBlocks * m.TS, default=0, mutable=True)
+
     # m.linkValueDB = Param(m.LinkBlocks * m.TS, default=0, mutable=True)
 
     # CONSTRAINTS
@@ -188,45 +272,62 @@ def create_model(name=None, nodes=None, links=None, types=None, ts_idx=None, par
     def NodeDelivery_definition(m, j, t):
         '''Deliveries comprise delivery blocks'''
         if j in m.Storage:
-            return m.nodeStorageDelivery[j, t] == sum(m.nodeDeliveryDB[j, b, sb, t] for (b, sb) in nodeBlockLookup(j))
+            return m.nodeStorageDelivery[j, t] == sum(m.nodeStorageDB[j, b, sb, t] for (b, sb) in nodeBlockLookup(j))
+        elif j in m.Hydropower:
+            return m.nodeHydropowerDelivery[j, t] == sum(
+                m.nodeHydropowerDB[j, b, sb, t] for (b, sb) in nodeBlockLookup(j))
         elif m.DemandNodes:
             return m.nodeDelivery[j, t] == sum(m.nodeDeliveryDB[j, b, sb, t] for (b, sb) in nodeBlockLookup(j))
         else:
             return Constraint.Skip
 
     m.NodeStorageDelivery_definition = Constraint(m.Storage, m.TS, rule=NodeDelivery_definition)
+    m.NodeHydropowerDelivery_definition = Constraint(m.Hydropower, m.TS, rule=NodeDelivery_definition)
+    # m.NodeFlowRequirementDelivery_definition = Constraint(m.FlowRequirement, m.TS, rule=NodeDelivery_definition)
     m.NodeDemandDelivery_definition = Constraint(m.DemandNodes, m.TS, rule=NodeDelivery_definition)
 
-    def NodeDelivery_rule(m, j, t):
+    # def ExcessHydropower_definition(m, j, t):
+    #     """Define excess hydropower, which is any hydropower above demand"""
+    #     # TODO: fix this!!
+        # return m.excessHydropower[j, t] == m.nodeHydropowerDelivery[j, t]
+
+    # m.ExcessHydropower_definition = Constraint(m.Hydropower, m.TS, rule=ExcessHydropower_definition)
+
+    def NodeDelivery_balance(m, j, t):
         '''Deliveries may not exceed physical conditions.'''
         if j in m.Storage:
             return m.nodeStorageDelivery[j, t] <= m.nodeStorage[j, t]
-        elif j in m.FlowRequirement | m.Hydropower:
-            return m.nodeDelivery[j, t] + m.nodeExcess[j, t] <= sum(m.linkOutflow[i, j, t] for i in m.NodesIn[j])
+        elif j in m.FlowRequirement:
+            return m.nodeFlowRequirementDelivery[j, t] + m.nodeExcess[j, t] <= sum(
+                m.linkOutflow[i, j, t] for i in m.NodesIn[j])
+        elif j in m.Hydropower:
+            return m.nodeHydropowerDelivery[j, t] + m.nodeExcessHydropower[j, t] <= sum(
+                m.linkOutflow[i, j, t] for i in m.NodesIn[j])
         elif j in m.DemandNodes:
-            # deliveries to demand nodes (urban, ag, general) must equal actual inflows
-            # note the use of local gains & losses: local sources such as precipitation can be included in deliveries
-            # TODO: make this more sophisticated to account for more specific gains and losses (basically, everything except consumptive losses; this might be left to the user to add precip, etc. as part of a local gain function)
-            # in the following, the assumption is that any water going to a demand node is accounted for as a delivery
             return m.nodeDelivery[j, t] == m.nodeInflow[j, t] + m.nodeLocalGain[j, t] - m.nodeLocalLoss[j, t]
         else:
-            # delivery cannot exceed sum of inflows
-            # TODO: update this to also include local gains and losses
-            # return m.nodeDelivery[j, t] <= sum(m.linkOutflow[i, j, t] for i in m.NodesIn[j])
             return Constraint.Skip
 
-    m.NodeDelivery_rule = Constraint(m.Nodes, m.TS, rule=NodeDelivery_rule)
+    m.NodeDelivery_balance = Constraint(m.Nodes, m.TS, rule=NodeDelivery_balance)
 
-    def NodeBlock_rule(m, j, b, sb, t):
+    def NodeBlock_constraint(m, j, b, sb, t):
         '''Delivery blocks cannot exceed their corresponding demand blocks.
         By extension, deliveries cannot exceed demands.
         '''
         if j in m.Storage:
-            return m.nodeDeliveryDB[j, b, sb, t] <= m.nodeStorageDemand[j, b, sb, t]
+            return m.nodeStorageDB[j, b, sb, t] <= m.nodeStorageDemand[j, b, sb, t]
+        elif j in m.Hydropower:
+            return m.nodeHydropowerDB[j, b, sb, t] <= m.nodeWaterDemand[j, b, sb, t]
         else:
             return m.nodeDeliveryDB[j, b, sb, t] <= m.nodeDemand[j, b, sb, t]
 
-    m.NodeBlock_constraint = Constraint(m.NodeBlocks, m.TS, rule=NodeBlock_rule)
+    m.NodeBlock_constraint = Constraint(m.NodeBlocks, m.TS, rule=NodeBlock_constraint)
+    m.StorageBlock_constraint = Constraint(m.StorageBlocks, m.TS, rule=NodeBlock_constraint)
+    m.HydropowerBlock_constraint = Constraint(m.HydropowerBlocks, m.TS, rule=NodeBlock_constraint)
+
+    def FlowRequirement_rule(m, j, t):
+        return m.nodeFlowRequirementDelivery[j, t] <= m.nodeRequirement[j, t]
+    m.FlowRequirement_rule = Constraint(m.FlowRequirement, m.TS, rule=FlowRequirement_rule)
 
     # def DemandDeficit_rule(m, j, b, t):
     # '''Demand deficit definition'''
@@ -328,6 +429,10 @@ def create_model(name=None, nodes=None, links=None, types=None, ts_idx=None, par
         # Link demand / value not yet implemented
 
         fn = summation(m.nodeValueDB, m.nodeDeliveryDB) \
+             + summation(m.nodeStorageValueDB, m.nodeStorageDB) \
+             + summation(m.nodeBaseHydropowerValueDB, m.nodeHydropowerDB) \
+             + summation(m.nodeExcessValue, m.nodeExcessHydropower) \
+             + summation(m.nodeViolationCost, m.nodeFlowRequirementDelivery) \
              - 10 * summation(m.floodStorage) \
              - 5 * summation(m.nodeSpill) \
             # - 1 * summation(m.emptyStorage)

@@ -70,6 +70,9 @@ class Scenario(object):
 
             this_chain.reverse()
 
+            if i:
+                this_chain = this_chain[1:]
+
             self.source_ids.extend(this_chain)  # include baseline
 
         self.base_ids = []

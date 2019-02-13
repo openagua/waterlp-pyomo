@@ -88,7 +88,9 @@ def _run_scenario(system=None, args=None, supersubscenario=None, reporter=None, 
         # CORE SCENARIO ROUTINE
         #######################
 
-        # system.update_internal_params()
+        if i:
+            system.update_boundary_conditions(ts, ts + system.foresight_periods, 'pre-process')
+            system.update_boundary_conditions(ts, ts + system.foresight_periods, 'main')
 
         # solve the model
         system.run(current_step, i, ts)
@@ -109,8 +111,7 @@ def _run_scenario(system=None, args=None, supersubscenario=None, reporter=None, 
             ts_next = runs[i + 1]
             try:
                 system.update_initial_conditions()
-                system.update_boundary_conditions(ts, ts + system.foresight_periods, 'pre-process')
-                system.update_boundary_conditions(ts_next, ts_next + system.foresight_periods, 'main')
+                system.update_boundary_conditions(ts, ts + system.foresight_periods, 'post-process')
             except Exception as err:
                 # we can still save results to-date
                 # system.save_results()
