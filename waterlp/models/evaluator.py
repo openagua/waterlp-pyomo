@@ -677,6 +677,8 @@ class Evaluator:
             tattr = self.conn.tattrs[(ref_key, ref_id, attr_id)]
             has_blocks = tattr['properties'].get('has_blocks') or tattr['attr_name'] in self.block_params
 
+            value = None
+
             # need to evaluate the data anew only as needed
             # tracking parent key prevents stack overflow
             if key != parentkey and rs_value is not None \
@@ -695,8 +697,6 @@ class Evaluator:
                 )
 
                 value = eval_data
-            else:
-                value = None
 
             result = value
 
@@ -735,27 +735,25 @@ class Evaluator:
 
                     elif offset_date_as_string:
 
-                        if result is None:
+                        if key == parentkey:
+                            # is the result already available from a parent get result? or...
+                            result = self.store.get(key, {}).get(offset_date_as_string)
+                            if result is None:
+                                # ...from the top-level function?
+                                result = self.hashstore[hashkey][offset_timestep - 1]
 
-                            if key == parentkey:
-                                # is the result already available from a parent get result? or...
-                                result = self.store.get(key, {}).get(offset_date_as_string)
-                                if result is None:
-                                    # ...from the top-level function?
-                                    result = self.hashstore[hashkey][offset_timestep - 1]
-
-                            else:
-                                if flavor == 'pandas':
-                                    if has_blocks:
-                                        result = value.loc[offset_date_as_string]
-                                    else:
-                                        result = value.loc[offset_date_as_string][0]
+                        else:
+                            if flavor == 'pandas':
+                                if has_blocks:
+                                    result = value.loc[offset_date_as_string]
                                 else:
-                                    if has_blocks:
-                                        result = {c: value[c][offset_date_as_string] for c in value.keys()}
-                                    else:
-                                        result = value.get(offset_date_as_string) or value.get(0, {}).get(
-                                            offset_date_as_string, 0)
+                                    result = value.loc[offset_date_as_string][0]
+                            else:
+                                if has_blocks:
+                                    result = {c: value[c][offset_date_as_string] for c in value.keys()}
+                                else:
+                                    result = value.get(offset_date_as_string) or value.get(0, {}).get(
+                                        offset_date_as_string, 0)
 
                 elif rs_value.type == 'array':
 
@@ -769,7 +767,7 @@ class Evaluator:
                             result = value
 
             if rs_value.type in ['timeseries', 'periodic timeseries']:
-                self.store[key].update(result)
+                self.store[key][timestep] = result
             else:
                 self.store[key] = result
 
