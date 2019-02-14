@@ -302,6 +302,8 @@ class WaterSystem(object):
                 if not res_attr:
                     continue  # this is for a different resource type
 
+                attr_name = res_attr['attr_name']
+
                 intermediary = res_attr['properties'].get('intermediary')
                 is_var = res_attr['is_var'] == 'Y'
 
@@ -338,7 +340,6 @@ class WaterSystem(object):
                     is_function = metadata.get('use_function', 'N') == 'Y'
 
                     # get attr name
-                    attr_name = res_attr['attr_name']
                     attr_id = res_attr['attr_id']
 
                     tattr = self.conn.tattrs[(resource_type, resource_id, attr_id)]
@@ -377,19 +378,7 @@ class WaterSystem(object):
                                 flavor='native'
                             )
                         except Exception as err:
-                            if resource_type == 'node':
-                                resource_name = self.nodes.get(resource_id, {}).get('name')
-                            elif resource_type == 'link':
-                                n1, n2 = self.link_nodes.get(resource_id)
-                                resource_name = self.links.get((n1, n2), {}).get('name')
-                            else:
-                                resource_name = 'network'
-                            msg = '{}\n\n{}'.format(
-                                err,
-                                'This error occurred when calculating {} for {}.'.format(rs['value']['name'],
-                                                                                         resource_name)
-                            )
-                            raise Exception(msg)
+                            raise self.makeResourceAttributeException(err, resource_type, resource_id, attr_name)
 
                     if value is None or type(value) == str and not value:
                         continue
@@ -454,19 +443,7 @@ class WaterSystem(object):
                     self.blocks[resource_type][idx] = blocks
 
                 except Exception as err:
-                    if resource_type == 'node':
-                        resource_name = self.nodes.get(resource_id, {}).get('name')
-                    elif resource_type == 'link':
-                        n1, n2 = self.link_nodes.get(resource_id)
-                        resource_name = self.links.get((n1, n2), {}).get('name')
-                    else:
-                        resource_name = 'network'
-                    msg = '{}\n\n{}'.format(
-                        err,
-                        'This error occurred when calculating {} for {}.'.format(rs['value']['name'], resource_name)
-                    )
-
-                    raise Exception(msg)
+                    raise self.makeResourceAttributeException(err, resource_type, resource_id, attr_name)
 
     def initialize(self, supersubscenario):
         """A wrapper for all initialization steps."""
@@ -1302,4 +1279,21 @@ class WaterSystem(object):
 
         return param_name
 
+    def makeResourceAttributeException(self, err, resource_type, resource_id, attr_name):
+        if resource_type == 'node':
+            resource_name = self.nodes.get(resource_id, {}).get('name')
+        elif resource_type == 'link':
+            n1, n2 = self.link_nodes.get(resource_id)
+            resource_name = self.links.get((n1, n2), {}).get('name')
+        else:
+            resource_name = 'network'
+        msg = '{}\n\n{}'.format(
+            err,
+            'This error occurred when calculating {attribute} for {resource}.'.format(
+                attribute=attr_name,
+                resource=resource_name
+            )
+        )
+
+        return Exception(msg)
 

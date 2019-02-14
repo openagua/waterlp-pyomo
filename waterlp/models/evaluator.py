@@ -156,18 +156,21 @@ def eval_descriptor(s):
     return returncode, errormsg, result
 
 
-def eval_timeseries(timeseries, dates, fill_value=None, flatten=False, has_blocks=False, method=None, flavor=None,
-                    date_format='iso'):
+def eval_timeseries(timeseries, dates, fill_value=None, fill_method=None, flatten=False, has_blocks=False, flavor=None,
+                    date_format='%Y-%m-%d %H:%M:%S'):
     try:
+
         df = pandas.read_json(timeseries)
         if df.empty:
             df = pandas.DataFrame(index=dates, columns=['0'])
         else:
+            # TODO: determine if the following reindexing is needed; it's unclear why it was added
+            # this doesn't work with periodic timeseries, as Pandas doesn't like the year 9999
             # df = df.reindex(pandas.DatetimeIndex(dates))
             if fill_value is not None:
                 df.fillna(value=fill_value, inplace=True)
-            elif method:
-                df.fillna(method=method)
+            elif fill_method:
+                df.fillna(method=fill_method)
 
         result = None
         if flatten:
@@ -176,19 +179,23 @@ def eval_timeseries(timeseries, dates, fill_value=None, flatten=False, has_block
         if flavor == 'pandas':
             result = df
         elif flavor == 'native':
-            df.index = df.index.strftime(date_format)
+            df.index = df.index.strftime(date_format=date_format)
             result = df.to_dict()
         elif flavor == 'json':
-            result = df.to_json(date_format=date_format)
+            result = df.to_json(date_format='iso')
         else:
-            result = None
+            result = df.to_json(date_format='iso')
 
         returncode = 0
         errormsg = 'No errors!'
 
-        return returncode, errormsg, result
     except:
-        raise
+
+        returncode = -1
+        errormsg = 'Error parsing timeseries data'
+        result = None
+
+    return returncode, errormsg, result
 
 
 def eval_array(array, flavor=None):
@@ -304,12 +311,7 @@ def make_default_value(data_type='timeseries', dates=None, nblocks=1, flavor='js
     elif data_type == 'periodic timeseries':
         dates = [pendulum.parse(d) for d in dates]
         periodic_dates = [d.replace(year=9999).to_datetime_string() for d in dates if (d - dates[0]).in_years() < 1]
-        default_eval_value = empty_data_timeseries(
-            periodic_dates,
-            nblocks=nblocks,
-            flavor=flavor,
-            date_format=date_format
-        )
+        default_eval_value = empty_data_timeseries(periodic_dates, nblocks=nblocks)
     elif data_type == 'array':
         default_eval_value = '[[],[]]'
     else:
@@ -460,7 +462,8 @@ class Evaluator:
         except:
             raise
 
-    def eval_function(self, code_string, depth=0, parentkey=None, flavor=None, flatten=False, has_blocks=False, data_type=None):
+    def eval_function(self, code_string, depth=0, parentkey=None, flavor=None, flatten=False, has_blocks=False,
+                      data_type=None):
         # This function is tricky. Basically, it should 1) return data in a format consistent with data_type
         # and 2) return everything that has previously been calculated, to aid in aggregation functions
         # The second goal is achieved by checking out results from the store
@@ -504,16 +507,6 @@ class Evaluator:
             for i, date_as_string in enumerate(self.dates_as_string[tsi:tsf]):
                 timestep = self.dates_as_string.index(date_as_string)
                 date = self.dates[timestep]
-                # value = getattr(self.namespace, hashkey)(
-                #     self,
-                #     hashkey=hashkey,
-                #     date=date,
-                #     timestep=timestep + 1,
-                #     depth=depth + 1,
-                #     flavor=flavor,
-                #     parentkey=parentkey
-                # )
-
                 periodic_timestep = self.periodic_timesteps[timestep]
                 water_year = date.year + (0 if date.month < self.start_date.month else 1)
                 value = getattr(self.namespace, hashkey)(
@@ -552,7 +545,7 @@ class Evaluator:
                     cols = range(len(values[0]))
                     if flavor == 'json':
                         result = pandas.DataFrame.from_records(data=values, index=dates_idx,
-                                                           columns=cols).to_json(date_format='iso')
+                                                               columns=cols).to_json(date_format='iso')
                     elif flavor == 'pandas':
                         result = pandas.DataFrame.from_records(data=values, index=dates_idx, columns=cols)
                     else:
@@ -574,7 +567,6 @@ class Evaluator:
                                     result[block] = {}
                                 result[block].update(vals)
                         else:
-                            result = self.store.get(parentkey, {})
                             result.update({d: v for d, v in zip(dates_idx, values)})
             else:
                 result = values[0]
@@ -639,27 +631,37 @@ class Evaluator:
             timestep = kwargs.get('timestep')
             flatten = kwargs.get('flatten', True)  # Flattens a variable with blocks. Defaults to True.
             start = kwargs.get('start')
-            end = kwargs.get('end', date)
+            end = kwargs.get('end')
             agg = kwargs.get('agg', 'mean')
+            default = kwargs.get('default')
 
             parts = key.split('/')
             ref_key, ref_id, attr_id = parts
             ref_id = int(ref_id)
             attr_id = int(attr_id)
 
+            # store results from get function
+            if key not in self.store:
+                self.store[key] = {}
+
             result = None
 
             rs_value = self.rs_values.get((ref_key, ref_id, attr_id))
 
             # calculate offset
+            offset_date_as_string = None
             if offset:
                 offset_timestep = self.dates.index(date) + offset + 1
             else:
                 offset_timestep = timestep
 
+            if offset_timestep < 1 or offset_timestep > len(self.dates):
+                result = None
+            else:
+                offset_date = self.dates[offset_timestep - 1]
+                offset_date_as_string = offset_date.to_datetime_string()
+
             if rs_value['type'] == 'timeseries':
-                if key not in self.store:
-                    self.store[key] = {}
                 offset_date = self.dates[offset_timestep - 1]
                 offset_date_as_string = offset_date.to_datetime_string()
 
@@ -674,6 +676,7 @@ class Evaluator:
 
             tattr = self.conn.tattrs[(ref_key, ref_id, attr_id)]
             has_blocks = tattr['properties'].get('has_blocks') or tattr['attr_name'] in self.block_params
+
             # need to evaluate the data anew only as needed
             # tracking parent key prevents stack overflow
             if key != parentkey and rs_value is not None \
@@ -687,7 +690,7 @@ class Evaluator:
                     depth=depth,
                     parentkey=key,
                     has_blocks=has_blocks,
-                    data_type=tattr.data_type, # NOTE: the type attribute data type overrides the actual value type
+                    data_type=tattr.data_type,  # NOTE: the type attribute data type overrides the actual value type
                     date_format='%Y-%m-%d %H:%M:%S'
                 )
 
@@ -700,11 +703,9 @@ class Evaluator:
             if self.data_type == 'timeseries':
                 if rs_value['type'] == 'timeseries':
 
-                    # store results from get function
-                    # if key not in self.store:
-                    #     self.store[key] = {}
-
-                    if start:
+                    if start or end:
+                        start = start or date
+                        end = end or date
 
                         if type(start) == str:
                             start = pendulum.parse(start)
@@ -712,8 +713,11 @@ class Evaluator:
                             end = pendulum.parse(end)
 
                         if key != parentkey:
-                            start_as_string = start.to_datetime_string()
-                            end_as_string = end.to_datetime_string()
+                            # start_as_string = start.to_datetime_string()
+                            # end_as_string = end.to_datetime_string()
+                            start_as_string = start.to_iso8601_string().replace('Z', '.000Z')
+                            end_as_string = end.to_iso8601_string().replace('Z', '.000Z')
+                            # Note annoying mismatch between Pandas and Pendulum iso8601 implementations
                             if default_flavor == 'pandas':
                                 result = value.loc[start_as_string:end_as_string].agg(agg)[0]
                             elif default_flavor == 'native':
@@ -721,26 +725,25 @@ class Evaluator:
                                     values = value
                                 else:
                                     values = list(value.values())[0]
-                                vals = [values[key] for key in values.keys() if
-                                        key >= start_as_string and key <= end_as_string]
+                                vals = [values[key] for key in values.keys() if start_as_string <= key <= end_as_string]
                                 if agg == 'mean':
                                     result = numpy.mean(vals)
                                 elif agg == 'sum':
                                     result = numpy.sum(vals)
-
                         else:
                             result = None
 
-                    else:
-
-                        # is the result already available?
-                        result = self.store[key].get(offset_date_as_string)
+                    elif offset_date_as_string:
 
                         if result is None:
 
                             if key == parentkey:
-                                # this is for cases where we are getting from a previous time step in a top-level function
-                                result = self.hashstore[hashkey][offset_timestep - 1]
+                                # is the result already available from a parent get result? or...
+                                result = self.store.get(key, {}).get(offset_date_as_string)
+                                if result is None:
+                                    # ...from the top-level function?
+                                    result = self.hashstore[hashkey][offset_timestep - 1]
+
                             else:
                                 if flavor == 'pandas':
                                     if has_blocks:
@@ -765,10 +768,12 @@ class Evaluator:
                         else:
                             result = value
 
-                        # store results from get function
-                        # self.store[key] = result
+            if rs_value.type in ['timeseries', 'periodic timeseries']:
+                self.store[key].update(result)
+            else:
+                self.store[key] = result
 
-            return result
+            return result or default
 
         except:
             res_info = key
@@ -776,8 +781,9 @@ class Evaluator:
 
     def read_csv(self, path, **kwargs):
 
-        kwargs.pop('date', None)
-        kwargs.pop('hashkey', None)
+        date = kwargs.pop('date')
+        date_as_string = date.to_datetime_string()
+        hashkey = kwargs.pop('hashkey')
         fullpath = '{}/{}'.format(self.network_files_path, path)
 
         data = self.external.get(fullpath)
@@ -786,11 +792,13 @@ class Evaluator:
             for arg in self.argnames:
                 exec("{arg} = kwargs.pop('{arg}', None)".format(arg=arg))
 
+            index_col = kwargs.pop('index_col', 0)
+            parse_dates = kwargs.pop('parse_dates', True)
             flavor = kwargs.pop('flavor', 'dataframe')
             fill_method = kwargs.pop('fill_method', 'interpolate')
             interp_method = kwargs.pop('interp_method', None)
 
-            df = pandas.read_csv(fullpath, **kwargs)
+            df = pandas.read_csv(fullpath, index_col=index_col, parse_dates=parse_dates, **kwargs)
 
             interp_args = {}
             if fill_method == 'interpolate':
