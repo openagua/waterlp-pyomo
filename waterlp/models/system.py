@@ -1032,6 +1032,7 @@ class WaterSystem(object):
 
             self.conn.call('update_scenario', {
                 'scen': result_scenario,
+                'return_summary': 'Y'
             })
 
         # save variable data to database
