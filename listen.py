@@ -15,9 +15,10 @@ from waterlp.logger import RunLogger
 
 class Worker(ConsumerMixin):
 
-    def __init__(self, connection, queues):
+    def __init__(self, connection, queues, logs_dir):
         self.connection = connection
         self.queues = queues
+        self.logs_dir = logs_dir
 
     def get_consumers(self, Consumer, channel):
         return [Consumer(queues=self.queues,
@@ -25,15 +26,10 @@ class Worker(ConsumerMixin):
 
     def process_task(self, body, message):
 
-        message.ack()
-
         body = json.loads(body)
         env = body.get('env', {})
         args = body.get('args')
         kwargs = body.get('kwargs')
-
-        app_dir = '/home/{}/.waterlp'.format(getpass.getuser())
-        logs_dir = '{}/logs'.format(app_dir)
 
         for key, value in env.items():
             os.environ[key] = value
@@ -42,7 +38,7 @@ class Worker(ConsumerMixin):
         parser = commandline_parser()
         args, unknown = parser.parse_known_args(args)
 
-        RunLog = RunLogger(name='waterlp', app_name=args.app_name, run_name=args.run_name, logs_dir=logs_dir,
+        RunLog = RunLogger(name='waterlp', app_name=args.app_name, run_name=args.run_name, logs_dir=self.logs_dir,
                            username=args.hydra_username)
 
         try:
@@ -51,6 +47,8 @@ class Worker(ConsumerMixin):
             RunLog.log_finish()
         except Exception as err:
             RunLog.log_error(message=str(err))
+
+        message.ack()
 
 
 if __name__ == '__main__':
@@ -83,7 +81,7 @@ if __name__ == '__main__':
 
             queue = Queue(name=queue_name, exchange=exchange, durable=False)
 
-            worker = Worker(conn, [queue])
+            worker = Worker(conn, [queue], logs_dir)
 
             print(' [*] Waiting for messages. To exit press CTRL+C')
 
