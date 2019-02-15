@@ -1035,10 +1035,6 @@ class WaterSystem(object):
                 'return_summary': 'Y'
             })
 
-        if self.args.debug:
-            print("Result scenario:")
-            print(result_scenario)
-
         # save variable data to database
         res_scens = []
         mb = 0
