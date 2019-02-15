@@ -1030,10 +1030,14 @@ class WaterSystem(object):
                 'modified_by': self.args.user_id,
             })
 
-            self.conn.call('update_scenario', {
+            result_scenario = self.conn.call('update_scenario', {
                 'scen': result_scenario,
                 'return_summary': 'Y'
             })
+
+        if self.args.debug:
+            print("Result scenario:")
+            print(result_scenario)
 
         # save variable data to database
         res_scens = []
