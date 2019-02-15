@@ -71,7 +71,7 @@ def create_model(name=None, nodes=None, links=None, types=None, ts_idx=None, par
 
     # create node-block and link-block sets
 
-    def NodeBlock(m):
+    def DemandNodeBlock(m):
         return [(j, b, sb) for j in m.DemandNodes for (b, sb) in nodeBlockLookup(j)]
 
     def StorageBlock(m):
@@ -83,7 +83,7 @@ def create_model(name=None, nodes=None, links=None, types=None, ts_idx=None, par
     # def LinkBlock(m):
     #     return [(i, j, b, sb) for i, j in m.Links for (b, sb) in linkBlockLookup(i, j)]
 
-    m.NodeBlocks = Set(dimen=3, initialize=NodeBlock)
+    m.DemandNodeBlocks = Set(dimen=3, initialize=DemandNodeBlock)
     m.StorageBlocks = Set(dimen=3, initialize=StorageBlock)
     m.HydropowerBlocks = Set(dimen=3, initialize=HydropowerBlock)
     # m.LinkBlocks = Set(dimen=4, initialize=LinkBlock)
@@ -97,17 +97,17 @@ def create_model(name=None, nodes=None, links=None, types=None, ts_idx=None, par
     m.nodeHydropowerDelivery \
         = Var(m.Hydropower * m.TS, domain=NonNegativeReals)  # delivery to hydropower nodes
 
-    m.nodeDeliveryDB = Var(m.NodeBlocks * m.TS, domain=NonNegativeReals)  # delivery to demand nodes
+    m.nodeDeliveryDB = Var(m.DemandNodeBlocks * m.TS, domain=NonNegativeReals)  # delivery to demand nodes
     m.nodeStorageDB = Var(m.StorageBlocks * m.TS, domain=NonNegativeReals)  # delivery to demand nodes
     m.nodeHydropowerDB = Var(m.HydropowerBlocks * m.TS, domain=NonNegativeReals)  # delivery to hydropower
     # m.linkDelivery = Var(m.Links * m.TS, domain=NonNegativeReals)  # not valued yet; here as a placeholder
     # m.linkDeliveryDB = Var(m.LinkBlocks * m.TS, domain=NonNegativeReals)
     m.nodeStorage = Var(m.Storage * m.TS, domain=NonNegativeReals)  # storage
 
-    # m.nodeDemandDeficit = Var(m.NodeBlocks * m.TS, domain=NonNegativeReals, initialize=0.0)
+    # m.nodeDemandDeficit = Var(m.DemandNodeBlocks * m.TS, domain=NonNegativeReals, initialize=0.0)
 
     # m.nodeStorageDB = Var(m.Storage)
-    # m.nodeFulfillmentDB = Var(m.NodeBlocks * m.TS, domain=NonNegativeReals) # Percent of delivery fulfilled (i.e., 1 - % shortage)
+    # m.nodeFulfillmentDB = Var(m.DemandNodeBlocks * m.TS, domain=NonNegativeReals) # Percent of delivery fulfilled (i.e., 1 - % shortage)
 
     m.nodeGain = Var(m.Nodes * m.TS, domain=Reals)  # gain (local inflows; can be net positive or negative)
     if debug_gain:
@@ -141,16 +141,11 @@ def create_model(name=None, nodes=None, links=None, types=None, ts_idx=None, par
         if param['is_var'] == 'Y':
             continue
 
-        data_type = param['data_type']
-        resource_type = param['resource_type']
-        attr_name = param['attr_name']
-        unit = param['unit']
-        intermediary = param['intermediary']
+        data_type = param.data_type
+        resource_type = param.resource_type
+        has_blocks = param.has_blocks
 
-        properties = param.get('properties', {})
-        has_blocks = properties.get('has_blocks', False) or attr_name in block_params
-
-        if intermediary or resource_type == 'network':
+        if param.intermediary or resource_type == 'network':
             continue
 
         initial_values = variables.get(param_name, None)
@@ -172,8 +167,10 @@ def create_model(name=None, nodes=None, links=None, types=None, ts_idx=None, par
                     param_definition = 'm.HydropowerBlocks'
                 elif param_name in ['nodeStorageDemand', 'nodeStorageValue']:
                     param_definition = 'm.StorageBlocks'
+                elif param_name in ['nodeValue', 'nodeDemand']:
+                    param_definition = 'm.DemandNodeBlocks'
                 else:
-                    param_definition = 'm.{resource_type}Blocks'
+                    continue
             else:
                 param_definition = 'm.{resource_type}s'
             param_definition += ', m.TS'
@@ -202,7 +199,7 @@ def create_model(name=None, nodes=None, links=None, types=None, ts_idx=None, par
     m.nodeLocalLoss = Param(m.Nodes, m.TS, default=0)  # placeholder
 
     # parameters to convert priorities to values
-    # m.nodeValueDB = Param(m.NodeBlocks * m.TS, default=0, mutable=True)
+    # m.nodeValueDB = Param(m.DemandNodeBlocks * m.TS, default=0, mutable=True)
     # m.nodeStorageValueDB = Param(m.StorageBlocks * m.TS, default=0, mutable=True)
     # m.nodeBaseHydropowerValueDB = Param(m.HydropowerBlocks * m.TS, default=0, mutable=True)
 
@@ -318,10 +315,12 @@ def create_model(name=None, nodes=None, links=None, types=None, ts_idx=None, par
             return m.nodeStorageDB[j, b, sb, t] <= m.nodeStorageDemand[j, b, sb, t]
         elif j in m.Hydropower:
             return m.nodeHydropowerDB[j, b, sb, t] <= m.nodeWaterDemand[j, b, sb, t]
-        else:
+        elif j in m.DemandNodes:
             return m.nodeDeliveryDB[j, b, sb, t] <= m.nodeDemand[j, b, sb, t]
+        else:
+            return Constraint.Skip
 
-    m.NodeBlock_constraint = Constraint(m.NodeBlocks, m.TS, rule=NodeBlock_constraint)
+    m.DemandNodeBlock_constraint = Constraint(m.DemandNodeBlocks, m.TS, rule=NodeBlock_constraint)
     m.StorageBlock_constraint = Constraint(m.StorageBlocks, m.TS, rule=NodeBlock_constraint)
     m.HydropowerBlock_constraint = Constraint(m.HydropowerBlocks, m.TS, rule=NodeBlock_constraint)
 
@@ -332,7 +331,7 @@ def create_model(name=None, nodes=None, links=None, types=None, ts_idx=None, par
     # def DemandDeficit_rule(m, j, b, t):
     # '''Demand deficit definition'''
     # return m.nodeDemandDeficit[j, b, t] == m.nodeDemand[j, b, t] - m.nodeDeliveryDB[j, b, t]
-    # m.NodeDemandDeficit_constraint = Constraint(m.NodeBlocks, m.TS, rule=DemandDeficit_rule)
+    # m.NodeDemandDeficit_constraint = Constraint(m.DemandNodeBlocks, m.TS, rule=DemandDeficit_rule)
 
     # def LinkBlock_rule(m, i, j, b, t):
     # '''Link flow blocks cannot exceed their corresponding demand blocks.'''

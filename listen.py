@@ -3,7 +3,7 @@ import json
 import getpass
 from shutil import rmtree
 from kombu import Connection, Exchange, Queue
-from kombu.mixins import ConsumerMixin
+from kombu.mixins import ConsumerMixin, ConsumerProducerMixin
 import os
 from main import commandline_parser, run_model
 

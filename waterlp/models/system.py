@@ -1,4 +1,5 @@
 import os
+from attrdict import AttrDict
 from math import sqrt
 import json
 from io import StringIO
@@ -96,8 +97,8 @@ class WaterSystem(object):
 
         self.timeseries = {}
         self.variables = {}
-        self.block_params = ['Demand', 'Storage Demand', 'Water Demand', 'Value', 'Storage Value', 'Base Value']
-        # self.block_params = []
+        # self.block_params = ['Demand', 'Storage Demand', 'Water Demand', 'Value', 'Storage Value', 'Base Value']
+        self.block_params = []
         self.storageDemandParams = ['nodeStorageDemand']
         self.nonStorageDemandParams = ['nodeDemand', 'nodeWaterDemand']
         self.demandParams = self.storageDemandParams + self.nonStorageDemandParams
@@ -344,7 +345,7 @@ class WaterSystem(object):
 
                     tattr = self.conn.tattrs[(resource_type, resource_id, attr_id)]
                     properties = tattr.properties
-                    has_blocks = tattr.attr_name in self.block_params or properties.get('has_blocks', False)
+                    has_blocks = properties.get('has_blocks', False)
 
                     # get data type
                     data_type = rs.value.type
@@ -483,15 +484,20 @@ class WaterSystem(object):
                 param_name = self.get_param_name(resource_type, type_attr['attr_name'])
 
                 if param_name not in self.params:
-                    param = type_attr
+                    param = AttrDict(type_attr)
+                    param.update(param.properties)
                     param.update(
-                        resource_type=resource_type.lower(),
-                        intermediary=type_attr['properties'].get('intermediary', False)
+                        scale=param.get('scale', 1),
+                        unit=param.get('unit'),
+                        intermediary=param.get('intermediary', False),
+                        has_blocks=param.get('has_blocks', False),
+                        resource_type=resource_type.lower()
                     )
+                    del param['properties']
                     self.params[param_name] = param
 
                     if param_name == 'nodeInitialStorage':
-                        self.storage_scale = param.properties.get('scale', 1)
+                        self.storage_scale = param.get('scale', 1)
                         self.storage_unit = param.unit
 
     def setup_subscenario(self, supersubscenario):
@@ -616,12 +622,9 @@ class WaterSystem(object):
 
         try:
             param = self.params[param_name]
-            intermediary = param['intermediary']
-
-            properties = param.get('properties', {})
-            has_blocks = properties.get('has_blocks', False)
-
-            if scope == 'store' and (step == 'main' and intermediary or step in ['pre-process', 'post-process'] and not intermediary):
+            if scope == 'store' \
+                    and (step == 'main' and param.intermediary
+                         or step in ['pre-process', 'post-process'] and not param.intermediary):
                 return
 
             dimension = param['dimension']
@@ -648,8 +651,8 @@ class WaterSystem(object):
                         # full_key = (resource_type, resource_id, attr_id, dates_as_string)
                         rc, errormsg, values = self.evaluator.eval_function(
                             func,
-                            has_blocks=has_blocks,
-                            flatten=not has_blocks,
+                            has_blocks=param.has_blocks,
+                            flatten=not param.has_blocks,
                             data_type=data_type,
                             parentkey=parentkey,
                             flavor='native'
@@ -664,16 +667,16 @@ class WaterSystem(object):
 
                     # update missing blocks, if any
                     # routine to add blocks using quadratic values - this needs to be paired with a similar routine when updating boundary conditions
-                    if has_blocks:
+                    if param.has_blocks:
                         values = self.add_subblocks(values, param_name)
 
-            if has_blocks:
+            if param.has_blocks:
                 cols = values.keys()
             else:
                 cols = [0]
             for j, c in enumerate(cols):
 
-                if has_blocks:
+                if param.has_blocks:
                     vals = values[c]
                 else:
                     vals = values.get(c, values)
@@ -695,14 +698,14 @@ class WaterSystem(object):
 
                     if scope == 'store':
                         # send the result to the data store
-                        self.store_value(resource_type, resource_id, attr_id, datetime, val, has_blocks=has_blocks)
+                        self.store_value(resource_type, resource_id, attr_id, datetime, val, has_blocks=param.has_blocks)
 
                     if step == 'main':
-                        if has_blocks and scope != 'model':
+                        if param.has_blocks and scope != 'model':
                             continue
 
                         if val is not None:
-                            scale = param.properties.get('scale', 1)
+                            scale = param.get('scale', 1)
                             # only convert if updating the LP model
                             if dimension == 'Volumetric flow rate':
                                 val = convert(val * scale, dimension, unit, 'hm^3 day^-1')
@@ -711,7 +714,7 @@ class WaterSystem(object):
 
                         # create key
                         pyomo_key = list(idx) + [i] if type(idx) == tuple else [idx, i]
-                        if has_blocks:
+                        if param.has_blocks:
                             # add block & subblock to key
                             pyomo_key.insert(-1, c[0])
                             pyomo_key.insert(-1, c[1])
@@ -889,11 +892,9 @@ class WaterSystem(object):
 
         resource_type = param.get('resource_type')
         dimension = param.get('dimension')
-        unit = param.get('unit')
-        properties = param.get('properties', {})
-        scale = properties.get('scale', 1)
-        has_blocks = properties.get('has_blocks', False) or pyomo_param.name in self.block_params
-        attr_id = param.get('attr_id')
+        unit = param.unit
+        scale = param.scale
+        attr_id = param.attr_id
 
         # collect to results
         for idx, p in pyomo_param.items():
@@ -934,7 +935,7 @@ class WaterSystem(object):
                 else:
                     res_id = self.links[res_idx]['id']
 
-                self.store_value(resource_type, res_id, attr_id, timestamp, val, has_blocks=has_blocks)
+                self.store_value(resource_type, res_id, attr_id, timestamp, val, has_blocks=param.has_blocks)
             except Exception as err:
                 raise
 
