@@ -534,13 +534,14 @@ class Evaluator:
 
             for ts, date in enumerate(dates):
                 date_as_string = date.to_datetime_string()
+                timestep = self.dates_as_string.index(date_as_string) + 1
                 periodic_timestep = self.periodic_timesteps[ts]
                 water_year = date.year + (0 if date.month < self.start_date.month else 1)
                 value = getattr(self.namespace, hashkey)(
                     self,
                     hashkey=hashkey,
                     date=date,
-                    timestep=ts + 1,
+                    timestep=timestep,
                     periodic_timestep=periodic_timestep,
                     start_date=self.start_date,
                     end_date=self.end_date,
@@ -604,7 +605,10 @@ class Evaluator:
                         flattened = {}
                         for col, vals in result.items():
                             for date, val in vals.items():
-                                flattened[date] = flattened.get(date, 0) + val
+                                try:
+                                    flattened[date] = flattened.get(date, 0) + val
+                                except:
+                                    flattened[date] = None
                         result = flattened
 
                 else:
@@ -807,7 +811,7 @@ class Evaluator:
             else:
                 self.store[key] = result
 
-            return result if result is not None else default
+            return result
 
         except:
             res_info = key

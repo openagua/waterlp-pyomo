@@ -631,6 +631,9 @@ class WaterSystem(object):
                          or step in ['pre-process', 'post-process'] and not param.intermediary):
                 return
 
+            if scope == 'model' and param.intermediary:
+                return
+
             dimension = param['dimension']
             data_type = param['data_type']
             unit = param['unit']
@@ -766,8 +769,8 @@ class WaterSystem(object):
 
         # 2. update Pyomo model
         if step == 'main':
-            for param_name in self.valueParams + self.demandParams:
-                params = self.timeseries.get(param_name, {})
+            # for param_name in self.valueParams + self.demandParams:
+            for param_name, params in self.timeseries.items():
                 for idx, p in params.items():
                     self.update_boundary_condition(
                         idx,
@@ -1102,7 +1105,7 @@ class WaterSystem(object):
                     }
                 }
 
-                if self.args.debug:
+                if self.args.debug and self.args.debug_ts <= 10:
                     result_scenario['resourcescenarios'] = [rs]
                     resp = self.conn.dump_results(result_scenario)
                     if 'id' not in resp:

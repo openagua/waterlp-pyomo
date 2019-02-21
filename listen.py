@@ -22,6 +22,8 @@ class Worker(ConsumerMixin):
 
     def get_consumers(self, Consumer, channel):
         return [Consumer(queues=self.queues,
+                         prefetch_count=0,
+                         no_ack=True,
                          callbacks=[self.process_task])]
 
     def process_task(self, body, message):
