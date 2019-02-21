@@ -227,7 +227,8 @@ class WaterSystem(object):
             settings['network_files_path'] = bucket_name and network_folder and 's3://{}/{}'.format(bucket_name,
                                                                                                     network_folder)
 
-        self.evaluator = Evaluator(self.conn, settings=settings, date_format=self.date_format)
+        # self.evaluator = Evaluator(self.conn, settings=settings, date_format=self.date_format)
+        self.evaluator = Evaluator(self.conn, settings=settings)
         self.dates = self.evaluator.dates
         self.dates_as_string = self.evaluator.dates_as_string
         self.total_steps = len(self.dates)
@@ -582,13 +583,16 @@ class WaterSystem(object):
                 raise
 
         elif param_name in self.valueParams:
-            for block in values:
-                for i, subblock in enumerate(subblocks):
-                    new_vals = {}
-                    for d, v in values[block].items():
-                        # new_vals[d] = v + (1 - sqrt((nsubblocks - i) / nsubblocks))
-                        new_vals[d] = v - 1 + ((nsubblocks - i) / nsubblocks)**2
-                    new_values[(block, subblock)] = new_vals
+            try:
+                for block in values:
+                    for i, subblock in enumerate(subblocks):
+                        new_vals = {}
+                        for d, v in values[block].items():
+                            # new_vals[d] = v + (1 - sqrt((nsubblocks - i) / nsubblocks))
+                            new_vals[d] = v - 1 + ((nsubblocks - i) / nsubblocks)**2
+                        new_values[(block, subblock)] = new_vals
+            except:
+                raise
 
         return new_values
 
@@ -649,7 +653,7 @@ class WaterSystem(object):
                     self.evaluator.data_type = data_type
                     try:
                         # full_key = (resource_type, resource_id, attr_id, dates_as_string)
-                        rc, errormsg, values = self.evaluator.eval_function(
+                        values = self.evaluator.eval_function(
                             func,
                             has_blocks=param.has_blocks,
                             flatten=not param.has_blocks,
@@ -657,13 +661,11 @@ class WaterSystem(object):
                             parentkey=parentkey,
                             flavor='native'
                         )
-                        if errormsg:
-                            raise Exception(errormsg)
                     except Exception as err:
                         raise self.create_exception(parentkey, str(err))
 
                 else:
-                    values = self.get_value(resource_type, resource_id, attr_id)
+                    values = self.get_value(resource_type, resource_id, attr_id, has_blocks=param.has_blocks)
 
                     # update missing blocks, if any
                     # routine to add blocks using quadratic values - this needs to be paired with a similar routine when updating boundary conditions
@@ -981,7 +983,7 @@ class WaterSystem(object):
 
         key_string = '{ref_key}/{ref_id}/{attr_id}'.format(ref_key=ref_key, ref_id=ref_id, attr_id=attr_id)
         if has_blocks:
-            val = self.store[key_string][0]  # TODO: get specific block
+            val = self.store[key_string] # TODO: get specific block
         else:
             val = self.store[key_string]
         if timestamp:
@@ -1059,12 +1061,16 @@ class WaterSystem(object):
                     continue
                 param_name = self.get_param_name(res_type, tattr['attr_name'])
 
-                if param_name not in self.params:
+                param = self.params.get(param_name)
+                if not param:
                     continue  # it's probably an internal variable/parameter
 
                 # define the dataset value
                 try:
-                    value = json.dumps({'0': OrderedDict(sorted(value.items()))})
+                    if param.has_blocks and type(list(value.values())[0]) == dict:
+                        value = pd.DataFrame(value).to_json()
+                    else:
+                        value = pd.DataFrame({0: value}).to_json()
                 except:
                     continue
 
@@ -1095,6 +1101,13 @@ class WaterSystem(object):
                         'value': value
                     }
                 }
+
+                if self.args.debug:
+                    result_scenario['resourcescenarios'] = [rs]
+                    resp = self.conn.dump_results(result_scenario)
+                    if 'id' not in resp:
+                        raise Exception("Error saving {}".format(param_name))
+
                 res_scens.append(rs)
                 mb += len(value.encode()) * 1.1 / 1e6  # large factor of safety
 
