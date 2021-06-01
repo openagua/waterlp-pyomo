@@ -46,7 +46,7 @@ six==1.11.0
 tornado==5.1.1
 txaio==2.8.2
 tzlocal==1.5.1
-urllib3==1.24.1
+urllib3==1.26.5
 vine==1.1.4
 websockets==7.0
 Werkzeug==0.14.1
