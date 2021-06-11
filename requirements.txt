@@ -48,7 +48,7 @@ txaio==2.8.2
 tzlocal==1.5.1
 urllib3==1.24.1
 vine==1.1.4
-websockets==7.0
+websockets==9.1
 Werkzeug==0.14.1
 XlsxWriter==1.0.2
 zope.interface==4.4.3
